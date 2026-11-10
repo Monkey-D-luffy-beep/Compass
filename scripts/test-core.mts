@@ -225,9 +225,30 @@ const nx = { ok: true, generatedAt: 'x', signups: { thisWeek: 9, lastWeek: 6 }, 
 const nxr = await pulse.fetchNexora({ NEXORA_PULSE_URL: 'https://x/api/pulse', NEXORA_PULSE_TOKEN: 't' }, (async (_u: string, i?: RequestInit) => { yes('Nexora sends the bearer token', (i?.headers as Record<string, string>).Authorization === 'Bearer t'); return new Response(JSON.stringify(nx), { status: 200 }); }) as never);
 eq('Nexora feed parsed', nxr.state, 'ready');
 const txt = pulse.pulseText({ generatedAt: 'x', dodo: live, nexora: nxr });
-yes('pulse text carries the real numbers', /\$6\.98/.test(txt) && /Signups[^\n]*: 9 vs 6/.test(txt) && /12 run out/.test(txt), txt);
+yes('pulse text carries the real numbers', /Active subscriptions/.test(txt) && /Signups[^\n]*: 9 vs 6/.test(txt) && /12 run out/.test(txt), txt);
 const txt2 = pulse.pulseText({ generatedAt: 'x', dodo: { state: 'not-set-up', why: 'no key' }, nexora: { state: 'error', why: 'down' } });
 yes('missing sources tell the assistant not to invent numbers', /Do not state any revenue/.test(txt2) && /Do not state any signup/.test(txt2));
+
+console.log('settled revenue and overview');
+const settle = new Map([['a', { currency: 'USD', net: 242 - 37 }], ['b', { currency: 'USD', net: 199 }], ['e', { currency: 'USD', net: 300 }]]);
+const sum2 = pulse.summariseDodo(pays, null, NOW, 28, false, settle);
+eq('settled USD this week is net of tax, in dollars', sum2.settled.find((r) => r.currency === 'USD')?.thisWeek, 4.04);
+eq('settled USD last week', sum2.settled.find((r) => r.currency === 'USD')?.lastWeek, 3);
+eq('succeeded payments with no settlement detail are counted, not guessed', sum2.settledMissing, 1);
+yes('the assistant text states settled USD, not per-currency noise', /settled revenue \(USD.*\$4\.04/.test(pulse.pulseText({ generatedAt: 'x', dodo: { state: 'ready', data: sum2 }, nexora: { state: 'not-set-up', why: 'x' } })));
+const ov = await import('../src/lib/overview');
+const ovZ = (id: string): never => ({ id, name: id, kind: 'project', color: '#fff', note: null, sort: 0, archived: false }) as never;
+const ovT = (id: string, zone: string, over: object): never => ({ id, zoneId: zone, zoneName: zone, zoneColor: '#fff', title: id, notes: null, status: 'todo', dueOn: null, priority: 2, money: 0, kind: 'build', effort: null, createdAt: '2026-01-01T00:00:00.000Z', doneAt: null, ...over }) as never;
+const o = ov.buildOverview([ovZ('A'), ovZ('B')], [
+  ovT('t1', 'A', { status: 'done', doneAt: '2026-11-10T08:00:00.000Z' }),
+  ovT('t2', 'A', { dueOn: '2026-11-08' }),
+  ovT('t3', 'B', { dueOn: '2026-11-12', money: 3 }),
+  ovT('t4', 'B', { status: 'done', doneAt: '2026-10-01T08:00:00.000Z' }),
+], '2026-11-10');
+eq('overview totals', o.totals, { open: 2, overdue: 1, doneWeek: 1, addedWeek: 0, doneToday: 1 });
+eq('stalled = open work, nothing finished in 14 days', o.stalled.map((s) => s.zone.id), ['B']);
+eq('wins grouped by day', o.wins.map((w) => [w.day, w.tasks.length]), [['2026-11-10', 1]]);
+eq('coming up is soonest first', o.comingUp.map((t) => t.id), ['t2', 't3']);
 
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');
 process.exit(failed ? 1 : 0);

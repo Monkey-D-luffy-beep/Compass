@@ -1,8 +1,8 @@
 "use client";
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { RefreshCw, Sparkles } from 'lucide-react';
 import { call } from '@/lib/client';
-import type { Pulse } from '@/lib/pulse';
+import { usePulse } from '@/lib/usePulse';
 import { Markdown } from '@/components/Markdown';
 
 const WEEKLY = 'Give me my weekly update from the business pulse: what is new this week against last week (revenue, new customers, signups, uninstalls, usage, who is about to expire), what it means for the $1,000 a month goal, and the top three things to do about it. Use only the numbers in the pulse; say plainly what is missing.';
@@ -21,19 +21,9 @@ function Missing({ title, why, error }: { title: string; why: string; error?: bo
 }
 
 export function PulsePanel() {
-  const [pulse, setPulse] = useState<Pulse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const { pulse, error, busy, reload } = usePulse();
   const [brief, setBrief] = useState<string | null>(null);
   const [briefBusy, setBriefBusy] = useState(false);
-
-  const load = useCallback(async (fresh: boolean) => {
-    setBusy(true); setError(null);
-    try { setPulse(await call<Pulse>(`/api/pulse${fresh ? '?fresh=1' : ''}`, 'GET')); }
-    catch (e) { setError(e instanceof Error ? e.message : 'Could not load.'); }
-    finally { setBusy(false); }
-  }, []);
-  useEffect(() => { void load(false); }, [load]);
 
   async function writeBrief() {
     setBriefBusy(true); setBrief(null);
@@ -51,7 +41,7 @@ export function PulsePanel() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-2">
         <button className="btn btn-primary" onClick={writeBrief} disabled={briefBusy}><Sparkles className="mr-1.5 inline h-4 w-4" />{briefBusy ? 'Writing…' : 'Write my weekly update'}</button>
-        <button className="btn" onClick={() => load(true)} disabled={busy}><RefreshCw className={`mr-1.5 inline h-4 w-4 ${busy ? 'animate-spin' : ''}`} />Refresh</button>
+        <button className="btn" onClick={reload} disabled={busy}><RefreshCw className={`mr-1.5 inline h-4 w-4 ${busy ? 'animate-spin' : ''}`} />Refresh</button>
         <span className="text-[12.5px] text-faint">Updated {new Date(pulse.generatedAt).toISOString().slice(0, 16).replace('T', ' ')} UTC</span>
       </div>
       {brief && <section className="card card-pad"><p className="label mb-2">Your week</p><Markdown text={brief} /></section>}
@@ -62,13 +52,13 @@ export function PulsePanel() {
         <section>
           <p className="label mb-2">Money, from Dodo</p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {d.revenue.length === 0 && <Tile label="Revenue, 7 days" value="0">No successful payments in 14 days.</Tile>}
-            {d.revenue.map((r) => <Tile key={r.currency} label={`Revenue ${r.currency}, 7 days`} value={money(r.currency, r.thisWeek)}><Delta a={r.thisWeek} b={r.lastWeek} /> <span className="text-faint">· {r.paymentsThis} payments</span></Tile>)}
+            {d.settled.length === 0 && <Tile label="Revenue, 7 days" value="0">No settled payments in 14 days.</Tile>}
+            {d.settled.map((r) => <Tile key={'s' + r.currency} label={`Settled ${r.currency}, net of tax`} value={money(r.currency, r.thisWeek)}><Delta a={r.thisWeek} b={r.lastWeek} /></Tile>)}
             <Tile label="New paying customers" value={String(d.newCustomersThisWeek)}><Delta a={d.newCustomersThisWeek} b={d.newCustomersLastWeek} /></Tile>
             <Tile label="Failed payments" value={String(d.failedThisWeek)}><span className="text-faint">this week</span></Tile>
             {d.activeSubscriptions !== null && <Tile label="Active subscriptions" value={String(d.activeSubscriptions)}><span className="text-faint">{d.cancellingSubscriptions} set to end at next billing</span></Tile>}
           </div>
-          <p className="mt-2 text-[12.5px] text-faint">Currencies are not converted. “New” means a first payment inside the last {d.historyDays} days of history.{d.truncated && ' History was cut at the page limit, totals may be low.'}</p>
+          <p className="mt-2 text-[12.5px] text-faint">“Settled” is what Dodo credits you after converting and removing tax, before Dodo’s own fees; “New” means a first payment inside the last {d.historyDays} days of history.{d.truncated && ' History was cut at the page limit, totals may be low.'}</p>
         </section>
       )}
 

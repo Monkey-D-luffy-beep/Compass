@@ -16,20 +16,18 @@ export const metadata = { title: 'Today' };
 export default async function Today() {
   const db = await getDb();
   const today = todayStr();
-  const zones = await listZones(db);
-  const open = await listTasks(db, { status: 'open' });
+  const [zones, open, revRows, goal, routineRows, days, keyed] = await Promise.all([
+    listZones(db), listTasks(db, { status: 'open' }), listRevenue(db), revenueGoal(db), listRoutines(db, today), streak(db, today), hasKey(db),
+  ]);
   const focus = focusList(open, today, 3);
   const dueNow = open.filter((t) => ['overdue', 'today'].includes(bucketOf(t.dueOn, today)));
   const weekTasks = open.filter((t) => bucketOf(t.dueOn, today) === 'week');
-  const totals = monthTotals(await listRevenue(db));
-  const goal = await revenueGoal(db);
+  const totals = monthTotals(revRows);
   const latest = totals[totals.length - 1];
-  const routine = (await listRoutines(db, today)).map((r) => ({ ...r, runsToday: runsOn(r.days, today) })).filter((r) => r.runsToday);
+  const routine = routineRows.map((r) => ({ ...r, runsToday: runsOn(r.days, today) })).filter((r) => r.runsToday);
   const doneCount = routine.filter((r) => r.doneToday).length;
   const hour = hourNow();
   const greet = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
-  const days = await streak(db, today);
-  const keyed = await hasKey(db);
 
   return (
     <div className="space-y-6">

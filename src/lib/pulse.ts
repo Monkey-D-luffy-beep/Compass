@@ -8,12 +8,16 @@
 import type { FetchLike } from './ai';
 
 const DAY = 86_400_000;
+const g = globalThis as unknown as { __compass_pulse?: { at: number; value: Pulse }; __compass_settle?: Settle };
 
 export type Part<T> = { state: 'ready'; data: T } | { state: 'not-set-up'; why: string } | { state: 'error'; why: string };
 
 export interface CurrencyWeek { currency: string; thisWeek: number; lastWeek: number; paymentsThis: number; paymentsLast: number }
+export interface SettledWeek { currency: string; thisWeek: number; lastWeek: number }
 export interface DodoReport {
-  revenue: CurrencyWeek[];                 // major units (e.g. dollars), succeeded payments only
+  settled: SettledWeek[];                  // what Dodo actually settles to you, net of tax, per settlement currency (mostly USD). The number to read.
+  settledMissing: number;                  // payments whose settlement detail could not be read (left out of `settled`)
+  revenue: CurrencyWeek[];                 // what customers paid in their own currency, tax included; for reference only
   newCustomersThisWeek: number;            // first successful payment inside the history we fetched (28 days) fell in this week
   newCustomersLastWeek: number;
   failedThisWeek: number;
@@ -48,18 +52,25 @@ async function getJson(f: FetchLike, url: string, key: string): Promise<unknown>
 }
 
 /** Pure: turns raw Dodo payments into the report. Exported so it can be tested without a network. */
-export function summariseDodo(payments: DodoPayment[], subs: { status?: string; cancel_at_next_billing_date?: boolean }[] | null, now: number, historyDays = 28, truncated = false): DodoReport {
+export type Settle = Map<string, { currency: string; net: number }>;
+export function summariseDodo(payments: DodoPayment[], subs: { status?: string; cancel_at_next_billing_date?: boolean }[] | null, now: number, historyDays = 28, truncated = false, settle?: Settle): DodoReport {
   const thisStart = now - 7 * DAY, prevStart = now - 14 * DAY;
   const which = (iso?: string) => { const t = Date.parse(iso ?? ''); return t >= thisStart ? 'this' : t >= prevStart ? 'prev' : 'older'; };
   const ok = (p: DodoPayment) => !p.status || p.status === 'succeeded';
   const money = new Map<string, CurrencyWeek>();
   const products = new Map<string, number>();
   let failedThisWeek = 0;
+  const settled = new Map<string, SettledWeek>(); let settledMissing = 0;
   const firstSeen = new Map<string, number>();
 
   for (const p of payments) {
     const w = which(p.created_at);
     if (!ok(p)) { if (w === 'this' && p.status && /failed/.test(p.status)) failedThisWeek++; continue; }
+    if (settle && (w === 'this' || w === 'prev')) {
+      const st = p.payment_id ? settle.get(p.payment_id) : undefined;
+      if (!st) settledMissing++;
+      else { const r = settled.get(st.currency) ?? { currency: st.currency, thisWeek: 0, lastWeek: 0 }; r[w === 'this' ? 'thisWeek' : 'lastWeek'] += st.net; settled.set(st.currency, r); }
+    }
     const cur = p.currency || 'USD';
     const row = money.get(cur) ?? { currency: cur, thisWeek: 0, lastWeek: 0, paymentsThis: 0, paymentsLast: 0 };
     const amount = (p.total_amount ?? 0) / 100;
@@ -74,6 +85,8 @@ export function summariseDodo(payments: DodoPayment[], subs: { status?: string; 
 
   const active = subs ? subs.filter((s) => s.status === 'active') : null;
   return {
+    settled: [...settled.values()].map((r) => ({ ...r, thisWeek: Math.round(r.thisWeek) / 100, lastWeek: Math.round(r.lastWeek) / 100 })).sort((a, b) => (a.currency === 'USD' ? -1 : b.currency === 'USD' ? 1 : b.thisWeek - a.thisWeek)),
+    settledMissing,
     revenue: [...money.values()].map((r) => ({ ...r, thisWeek: Math.round(r.thisWeek * 100) / 100, lastWeek: Math.round(r.lastWeek * 100) / 100 })),
     newCustomersThisWeek: nThis, newCustomersLastWeek: nLast, failedThisWeek,
     activeSubscriptions: active ? active.length : null,
@@ -97,6 +110,17 @@ export async function fetchDodo(env: Env, f: FetchLike = fetch, now = Date.now()
       payments.push(...rows);
       if (rows.length < 100) break;
     }
+    // The list does not carry the settled amount, the single-payment call does. Only the 14 days we compare, 8 at a time.
+    const settle: Settle = g.__compass_settle ??= new Map();
+    const need = payments.filter((p) => p.payment_id && !settle.has(p.payment_id) && (!p.status || p.status === 'succeeded') && Date.parse(p.created_at ?? '') >= now - 14 * DAY);
+    for (let i = 0; i < need.length; i += 8) {
+      await Promise.all(need.slice(i, i + 8).map(async (p) => {
+        try {
+          const d = (await getJson(f, `${base}/payments/${p.payment_id}`, key)) as { settlement_amount?: number; settlement_currency?: string; settlement_tax?: number | null };
+          if (typeof d.settlement_amount === 'number' && d.settlement_currency) settle.set(p.payment_id!, { currency: d.settlement_currency, net: d.settlement_amount - (d.settlement_tax ?? 0) });
+        } catch { /* counted as missing */ }
+      }));
+    }
     let subs: { status?: string; cancel_at_next_billing_date?: boolean }[] | null = null;
     try {
       subs = []; for (let page = 0; page < 10; page++) {
@@ -104,7 +128,7 @@ export async function fetchDodo(env: Env, f: FetchLike = fetch, now = Date.now()
         subs.push(...rows); if (rows.length < 100) break;
       }
     } catch { subs = null; }   // payments are the point; a subscriptions hiccup should not hide them
-    return { state: 'ready', data: summariseDodo(payments, subs, now, historyDays, truncated) };
+    return { state: 'ready', data: summariseDodo(payments, subs, now, historyDays, truncated, settle) };
   } catch (e) { return { state: 'error', why: e instanceof Error ? e.message : 'Could not reach Dodo.' }; }
 }
 
@@ -124,7 +148,6 @@ export async function fetchNexora(env: Env, f: FetchLike = fetch): Promise<Part<
 }
 
 /* ----------------------------------------------------------------------------------- cache + text form */
-const g = globalThis as unknown as { __compass_pulse?: { at: number; value: Pulse } };
 
 /** Both sources, cached for 10 minutes per server instance so asking the assistant three questions does not hit Dodo three times. */
 export async function getPulse(env: Env = process.env, opts: { fresh?: boolean; f?: FetchLike } = {}): Promise<Pulse> {
@@ -146,7 +169,8 @@ export function pulseText(p: Pulse): string {
   else {
     const d = p.dodo.data;
     if (!d.revenue.length) out.push('- Dodo revenue: no successful payments in the last 14 days.');
-    for (const r of d.revenue) out.push(`- Dodo revenue (${r.currency}): ${cash(r.currency, r.thisWeek)} this week (${r.paymentsThis} payments) vs ${cash(r.currency, r.lastWeek)} (${r.paymentsLast}) before, ${delta(r.thisWeek, r.lastWeek)}. Currencies are not converted.`);
+    for (const r of d.settled) out.push(`- Dodo settled revenue (${r.currency}, net of tax, before Dodo fees): ${cash(r.currency, r.thisWeek)} this week vs ${cash(r.currency, r.lastWeek)} before, ${delta(r.thisWeek, r.lastWeek)}.`);
+    if (d.settledMissing) out.push(`- ${d.settledMissing} payments had no settlement detail and are left out of the settled figure.`);
     out.push(`- New paying customers: ${d.newCustomersThisWeek} this week vs ${d.newCustomersLastWeek} (first payment within the last ${d.historyDays} days of history, so a returning older customer can look new). Failed payments this week: ${d.failedThisWeek}.`);
     if (d.activeSubscriptions !== null) out.push(`- Active subscriptions in Dodo: ${d.activeSubscriptions}, of which ${d.cancellingSubscriptions} will end at the next billing date.`);
     if (d.byProductThisWeek.length) out.push('- Payments by product this week: ' + d.byProductThisWeek.map((x) => `${x.product} ${x.payments}`).join(', '));

@@ -2,9 +2,10 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Activity, LogOut, BookOpen, CalendarRange, Compass, Layers, Lightbulb, MessageSquare, Repeat, Settings, Sun, Wallet } from 'lucide-react';
+import { Activity, LayoutDashboard, LogOut, BookOpen, CalendarRange, Compass, Layers, Lightbulb, MessageSquare, Repeat, Settings, Sun, Wallet } from 'lucide-react';
 
 const NAV = [
+  { href: '/overview', label: 'Overview', icon: LayoutDashboard },
   { href: '/', label: 'Today', icon: Sun },
   { href: '/plan', label: 'Plan', icon: CalendarRange },
   { href: '/zones', label: 'Zones', icon: Layers },
