@@ -1,0 +1,8 @@
+.data/
+node_modules/
+.next/
+*.tsbuildinfo
+.smoke_data/
+.env*
+.vercel/
+.smoke.*

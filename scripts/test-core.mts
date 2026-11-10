@@ -1,0 +1,197 @@
+/** npx tsx --conditions react-server scripts/test-core.mts : the timeline maths, the store, the focus score and the assistant plumbing. */
+import { openMemory } from '../src/lib/db';
+import { addDays, bucketOf, dayLabel, dueFor, monthEnd, monthLabel, weekEnd, weekStart } from '../src/lib/dates';
+import { decrypt, encrypt } from '../src/lib/secrets';
+import { randomBytes } from 'node:crypto';
+
+let failed = 0;
+const ok = (n: string) => console.log('  PASS', n);
+const eq = (n: string, got: unknown, want: unknown) => { if (JSON.stringify(got) === JSON.stringify(want)) ok(n); else { failed++; console.log('  FAIL', n, '- got', JSON.stringify(got), 'want', JSON.stringify(want)); } };
+const yes = (n: string, c: boolean, why = '') => { if (c) ok(n); else { failed++; console.log('  FAIL', n, why); } };
+
+console.log('dates');
+// Wednesday 2026-11-11
+const T = '2026-11-11';
+eq('week ends on Sunday', weekEnd(T), '2026-11-15');
+eq('week starts on Monday', weekStart(T), '2026-11-09');
+eq('Sunday belongs to its own week', weekEnd('2026-11-15'), '2026-11-15');
+eq('Monday starts a new week', weekEnd('2026-11-16'), '2026-11-22');
+eq('month end', monthEnd(T), '2026-11-30');
+eq('month end in a leap year', monthEnd('2028-02-10'), '2028-02-29');
+eq('yesterday is overdue', bucketOf('2026-11-10', T), 'overdue');
+eq('today', bucketOf(T, T), 'today');
+eq('Sunday is this week', bucketOf('2026-11-15', T), 'week');
+eq('next Monday is next week', bucketOf('2026-11-16', T), 'next');
+eq('the Sunday after is still next week', bucketOf('2026-11-22', T), 'next');
+eq('later in the month', bucketOf('2026-11-30', T), 'month');
+eq('next month is later', bucketOf('2026-12-01', T), 'later');
+eq('no date is later', bucketOf(null, T), 'later');
+eq('"today" maps to today', dueFor('today', T), T);
+eq('"week" maps to Sunday', dueFor('week', T), '2026-11-15');
+eq('"next" maps to the Sunday after', dueFor('next', T), '2026-11-22');
+eq('"month" maps to month end', dueFor('month', T), '2026-11-30');
+eq('"later" has no date', dueFor('later', T), null);
+eq('"month" late in the month is the real month end, shown where it is due', [dueFor('month', '2026-11-26'), bucketOf(dueFor('month', '2026-11-26'), '2026-11-26')], ['2026-11-30', 'next']);
+eq('every "when" lands in its own bucket early in the month', (['today', 'week', 'next', 'month'] as const).map((w) => bucketOf(dueFor(w, '2026-11-03'), '2026-11-03')), ['today', 'week', 'next', 'month']);
+eq('addDays crosses a month', addDays('2026-11-30', 1), '2026-12-01');
+
+console.log('labels');
+eq('a day label', dayLabel('2026-11-10'), 'Tue 10 Nov');
+eq('a month label', monthLabel('2026-12'), 'Dec 2026');
+
+console.log('secrets');
+const key = randomBytes(32);
+eq('round trip', decrypt(encrypt('sk-ant-test', key), key), 'sk-ant-test');
+yes('the ciphertext is not the key', !encrypt('sk-ant-test', key).includes('sk-ant'));
+let wrong = false; try { decrypt(encrypt('x', key), randomBytes(32)); } catch { wrong = true; }
+yes('a different key cannot read it', wrong);
+
+
+console.log('store');
+const store = await import('../src/lib/store');
+const db = await openMemory();
+const zones = await store.listZones(db);
+yes('first run seeds the zones', zones.length === 5 && zones.some((z) => z.name === 'Growth'), zones.map((z) => z.name).join());
+yes('first run seeds real tasks, ideas, routines and a goal', (await store.listTasks(db)).length >= 15 && (await store.listIdeas(db)).length >= 4 && (await store.listRoutines(db)).length >= 5 && (await store.listGoals(db)).length >= 2);
+eq('revenue goal defaults to 1000', await store.revenueGoal(db), 1000);
+const rev = store.monthTotals(await store.listRevenue(db));
+eq('the seed has one revenue month of 300', rev.map((r) => r.total), [300]);
+const again = await openMemory(); eq('seeding is repeatable on a fresh database', (await store.listZones(again)).length, 5);
+
+const growth = zones.find((z) => z.name === 'Growth')!;
+const t = await store.addTask(db, { zone: 'growth', title: 'Test task', when: 'week', money: 3 }, T);
+eq('a task is added to the zone found by name', t.zoneName, 'Growth');
+eq('"week" gives the Sunday', t.dueOn, '2026-11-15');
+eq('money is kept', t.money, 3);
+yes('a done task gets a timestamp', !!(await store.updateTask(db, t.id, { status: 'done' }, T)).doneAt);
+eq('and loses it when reopened', (await store.updateTask(db, t.id, { status: 'todo' }, T)).doneAt, null);
+eq('moving it changes the date', (await store.updateTask(db, t.id, { when: 'next' }, T)).dueOn, '2026-11-22');
+const rejects = async (fn: () => Promise<unknown>) => { try { await fn(); return false; } catch (e) { return (e as Error).name === 'InputError'; } };
+yes('an unknown zone is a plain input error', await rejects(() => store.addTask(db, { zone: 'nonexistent', title: 'x' })));
+yes('an empty title is refused', await rejects(() => store.addTask(db, { zone: 'growth', title: '   ' })));
+eq('money is clamped to 3', (await store.addTask(db, { zone: growth.id, title: 'x', money: 99 }, T)).money, 3);
+
+console.log('editing');
+const ed = await store.updateTask(db, t.id, { title: 'Renamed', notes: 'a note', dueOn: '2026-12-24', zone: 'nexora', priority: 1, kind: 'growth', effort: 45, money: 2 }, T);
+eq('every field of a task can be edited', [ed.title, ed.notes, ed.dueOn, ed.zoneName, ed.priority, ed.kind, ed.effort, ed.money], ['Renamed', 'a note', '2026-12-24', 'Nexora', 1, 'growth', 45, 2]);
+eq('an exact date can be cleared', (await store.updateTask(db, t.id, { dueOn: null }, T)).dueOn, null);
+yes('a bad date is refused', await rejects(() => store.updateTask(db, t.id, { dueOn: '2026-13-45' }, T)));
+yes('an empty title is refused on edit', await rejects(() => store.updateTask(db, t.id, { title: '  ' }, T)));
+yes('an unknown zone is refused on edit', await rejects(() => store.updateTask(db, t.id, { zone: 'nowhere' }, T)));
+await store.deleteTask(db, t.id); eq('delete removes it', await store.getTask(db, t.id), null);
+
+console.log('focus');
+const base = { status: 'todo' as const, priority: 2 };
+yes('direct revenue beats no revenue', store.focusScore({ ...base, money: 3, dueOn: null }, T) > store.focusScore({ ...base, money: 0, dueOn: null }, T));
+yes('overdue beats later at the same money', store.focusScore({ ...base, money: 1, dueOn: '2026-11-01' }, T) > store.focusScore({ ...base, money: 1, dueOn: null }, T));
+yes('a done task never ranks', store.focusScore({ ...base, status: 'done', money: 3, dueOn: T }, T) < 0);
+yes('high priority beats low at the same money and date', store.focusScore({ status: 'todo', priority: 1, money: 1, dueOn: T }, T) > store.focusScore({ status: 'todo', priority: 3, money: 1, dueOn: T }, T));
+const top = store.focusList(await store.listTasks(db, { status: 'open' }), todayDate(), 3);
+yes('the seeded focus is led by something that earns money', top.length === 3 && top[0].money >= 2, JSON.stringify(top.map((x) => [x.title.slice(0, 30), x.money])));
+function todayDate() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+
+console.log('revenue and goals');
+await store.upsertRevenue(db, { month: '2026-12', source: 'ListLift', amount: 220 });
+await store.upsertRevenue(db, { month: '2026-12', source: 'ListLift', amount: 250 });
+await store.upsertRevenue(db, { month: '2026-12', source: 'GroupExporter', amount: 80 });
+eq('saving the same product and month replaces it', (await store.listRevenue(db)).filter((r) => r.month === '2026-12').map((r) => [r.source, r.amount]).sort(), [['GroupExporter', 80], ['ListLift', 250]]);
+eq('month totals add up', store.monthTotals(await store.listRevenue(db)).find((m) => m.month === '2026-12')?.total, 330);
+yes('a bad month is refused', await rejects(() => store.upsertRevenue(db, { month: 'December', source: 'x', amount: 1 })));
+yes('a negative amount is refused', await rejects(() => store.upsertRevenue(db, { month: '2026-12', source: 'x', amount: -5 })));
+const goal = (await store.listGoals(db))[0];
+eq('a goal\'s number can be updated', (await store.updateGoal(db, goal.id, { current: 450 })).current, 450);
+
+console.log('ideas');
+const idea = await store.addIdea(db, { title: 'Kept idea', kind: 'extension', pitch: 'p', moneyLogic: 'm', validateStep: 'v', score: 4 });
+eq('an idea can be kept', [idea.title, idea.status, idea.score], ['Kept idea', 'new', 4]);
+eq('and its status changed', (await store.updateIdea(db, idea.id, { status: 'validating' })).status, 'validating');
+await store.deleteIdea(db, idea.id);
+eq('and removed', (await store.listIdeas(db)).some((i) => i.id === idea.id), false);
+
+console.log('routine');
+const r = (await store.listRoutines(db, '2026-11-11'))[0];
+eq('not done at first', r.doneToday, false);
+eq('ticking marks it done', await store.toggleRoutine(db, r.id, '2026-11-11'), true);
+eq('and it shows as done', (await store.listRoutines(db, '2026-11-11')).find((x) => x.id === r.id)?.doneToday, true);
+eq('ticking again undoes it', await store.toggleRoutine(db, r.id, '2026-11-11'), false);
+yes('a weekday routine does not run on Saturday', !store.runsOn('1111100', '2026-11-14') && store.runsOn('1111100', '2026-11-13'));
+await store.toggleRoutine(db, r.id, '2026-11-09'); await store.toggleRoutine(db, r.id, '2026-11-10'); await store.toggleRoutine(db, r.id, '2026-11-11');
+eq('three days in a row is a streak of three', await store.streak(db, '2026-11-11'), 3);
+eq('a streak survives until the end of the day', await store.streak(db, '2026-11-12'), 3);
+eq('and breaks after a missed day', await store.streak(db, '2026-11-13'), 0);
+
+console.log('assistant plumbing');
+const ai = await import('../src/lib/ai');
+const snap = await ai.snapshot(db, '2026-11-11');
+yes('the snapshot names the money goal', /MONEY GOAL: \$1000/.test(snap), snap.slice(0, 200));
+yes('the snapshot lists open tasks with their zone and money', /\[Growth\].*\$\$\$/.test(snap));
+yes('the snapshot says what the app would focus on', /FOCUS BY THE APP/.test(snap));
+const sys = ai.systemPrompt('I am Saurav.', 'SNAP');
+yes('the system prompt carries the brain and the snapshot', sys.includes('I am Saurav.') && sys.includes('SNAP'));
+yes('it tells the model to put money first', /money first/i.test(sys));
+
+const names = ['Growth', 'Nexora', 'Study'];
+const good = ai.extractProposals('Do this.\n\n```tasks\n[{"title":"Rewrite the listing","zone":"growth","when":"week","money":3},{"title":"Nope","zone":"Nowhere","when":"today","money":1},{"title":"Study block","zone":"Study","when":"someday","money":9}]\n```\n', names);
+eq('the answer text is kept without the block', good.text, 'Do this.');
+eq('unknown zones are dropped', good.proposals.map((p) => p.title), ['Rewrite the listing', 'Study block']);
+eq('the zone name is normalised', good.proposals[0].zone, 'Growth');
+eq('an invalid "when" becomes this week and money is clamped', [good.proposals[1].when, good.proposals[1].money], ['week', 3]);
+eq('broken JSON gives no proposals and keeps the text', ai.extractProposals('Hi\n```tasks\n{nope\n```', names), { text: 'Hi', proposals: [] });
+eq('no block means no proposals', ai.extractProposals('Just text.', names), { text: 'Just text.', proposals: [] });
+
+// the call, against a fake Anthropic
+const calls: { url: string; init: RequestInit }[] = [];
+const fake = (status: number, json: unknown) => (async (url: string, init?: RequestInit) => { calls.push({ url, init: init! }); return new Response(JSON.stringify(json), { status }); }) as never;
+const out = await ai.callClaude('sk-ant-x', 'claude-sonnet-5-5', 'SYS', [{ role: 'user', content: 'hi' }], 100, fake(200, { content: [{ type: 'text', text: 'Hello' }] }));
+eq('the answer text comes back', out, 'Hello');
+eq('it calls Anthropic\'s Messages API', calls[0].url, 'https://api.anthropic.com/v1/messages');
+const sent = JSON.parse(String(calls[0].init.body));
+eq('with the model, the system prompt and the messages', [sent.model, sent.system, sent.messages], ['claude-sonnet-5-5', 'SYS', [{ role: 'user', content: 'hi' }]]);
+eq('the key travels in the header, not the body', [(calls[0].init.headers as Record<string, string>)['x-api-key'], String(calls[0].init.body).includes('sk-ant-x')], ['sk-ant-x', false]);
+async function failsWith(status: number, re: RegExp) { try { await ai.callClaude('k', 'm', 's', [{ role: 'user', content: 'x' }], 10, fake(status, { error: { message: 'detail' } })); return false; } catch (e) { return (e as Error).name === 'InputError' && re.test((e as Error).message) && !(e as Error).message.includes('"k"'); } }
+yes('a rejected key says so', await failsWith(401, /rejected the key/));
+yes('an unknown model says so', await failsWith(404, /does not know the model/));
+yes('a rate limit says so', await failsWith(429, /credit or going too fast/));
+
+// a whole question: saved, with history, proposals stored
+const db2 = await openMemory(); const k2 = randomBytes(32);
+await ai.saveKey(db2, k2, 'sk-ant-saved');
+yes('a saved key is encrypted in the database', !String(await store.getSetting(db2, 'anthropic_key')).includes('sk-ant-saved'));
+yes('something that is not an Anthropic key is refused', await rejects(() => ai.saveKey(db2, k2, 'not-a-key')));
+const seen: { system: string; messages: { role: string }[] }[] = [];
+const reply = (async (_u: string, init?: RequestInit) => { seen.push(JSON.parse(String(init!.body))); return new Response(JSON.stringify({ content: [{ type: 'text', text: 'Start with the store listing.\n```tasks\n[{"title":"Write the listing","zone":"Growth","when":"today","money":3}]\n```' }] }), { status: 200 }); }) as never;
+const got = await ai.ask(db2, k2, 'BRAIN TEXT', 'What first?', reply);
+eq('both sides of the exchange are saved', got.map((m) => m.role), ['user', 'assistant']);
+eq('the suggested task is stored with the answer', (await store.listMessages(db2)).at(-1)?.proposals.map((p) => p.title), ['Write the listing']);
+yes('the brain and the live snapshot reach the model', seen[0].system.includes('BRAIN TEXT') && /MONEY GOAL/.test(seen[0].system));
+await ai.ask(db2, k2, 'B', 'And then?', reply);
+eq('the second question carries the first exchange as history', seen[1].messages.map((m) => m.role), ['user', 'assistant', 'user']);
+let noKey = false; try { await ai.ask(await openMemory(), k2, 'B', 'hi', reply); } catch (e) { noKey = /API key/.test((e as Error).message); }
+yes('without a key it tells you where to add one', noKey);
+
+console.log('new ideas');
+const known = ['Kept idea'];
+const raw = 'Sure! Here you go:\n```json\n[{"title":"Container tracker","kind":"extension","pitch":"p","moneyLogic":"m","validateStep":"v"},{"title":"kept idea","kind":"extension"},{"title":"","kind":"lever"},{"title":"Bundle","kind":"weird","pitch":"x"}]\n```';
+const parsed = ai.parseIdeas(raw, known);
+eq('ideas are pulled out of chatter and a code fence', parsed.map((i) => i.title), ['Container tracker', 'Bundle']);
+eq('an idea he already has is not suggested again', parsed.some((i) => i.title.toLowerCase() === 'kept idea'), false);
+eq('an unknown kind becomes extension', parsed[1].kind, 'extension');
+eq('no JSON gives nothing', ai.parseIdeas('I cannot do that', []), []);
+eq('broken JSON gives nothing', ai.parseIdeas('[{"title": ', []), []);
+const gdb = await openMemory(); const gk = randomBytes(32); await ai.saveKey(gdb, gk, 'sk-ant-gen');
+const genReply = (async () => new Response(JSON.stringify({ content: [{ type: 'text', text: JSON.stringify([1, 2, 3, 4, 5, 6].map((n) => ({ title: 'Idea ' + n, kind: 'lever', pitch: 'p', moneyLogic: 'm', validateStep: 'v' }))) }] }), { status: 200 })) as never;
+const gen = await ai.generateIdeas(gdb, gk, 'BRAIN', 'freight', genReply);
+eq('at most five come back and none are saved until kept', [gen.length, (await store.listIdeas(gdb)).some((i) => i.title === 'Idea 1')], [5, false]);
+
+console.log('login');
+const auth = await import('../src/lib/auth');
+const tok = await auth.makeSession('pw', 1_000);
+yes('a fresh session is accepted', await auth.checkSession(tok, 'pw', 2_000));
+yes('another password is rejected', !(await auth.checkSession(tok, 'other', 2_000)));
+yes('an expired session is rejected', !(await auth.checkSession(tok, 'pw', 1_000 + 31 * 86_400_000)));
+yes('a tampered expiry is rejected', !(await auth.checkSession(`99999999999999.${tok.split('.')[1]}`, 'pw', 2_000)));
+yes('garbage and nothing are rejected', !(await auth.checkSession('abc', 'pw')) && !(await auth.checkSession(undefined, 'pw')));
+yes('same() compares exactly', auth.same('abc', 'abc') && !auth.same('abc', 'abd') && !auth.same('abc', 'abcd'));
+
+console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');
+process.exit(failed ? 1 : 0);

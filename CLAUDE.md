@@ -1,0 +1,48 @@
+# Compass: a personal planner and advisor, for one person
+
+Built 2026-11-10. Open a session in this folder for work on Compass itself. The root `nexora/CLAUDE.md` is the central brain.
+
+## What it is
+A single-user task manager that is also an assistant. It breaks work into **zones** (Growth, Nexora, Extension Club, Study,
+Money & Goals), lays tasks out on a **timeline** (overdue, today, this week, next week, this month, later), tracks **money** against
+the $1,000-a-month goal, keeps an **ideas** list (each with why it could earn and the cheapest test), a daily **routine**, and an
+**assistant** (Claude) that reads `BRAIN.md` plus a live snapshot of the data before every answer.
+
+## Run it
+`npm install` once, then `npm run dev` (http://127.0.0.1:3400). Port 3000 belongs to another project. `npm test` runs the logic tests
+(dates, store, editing, ideas, focus score, login tokens, the Anthropic call against a fake) on an in-memory Postgres.
+Add the Anthropic API key on the Settings page (stored encrypted) or set `ANTHROPIC_API_KEY`.
+
+## Data and hosting (changed 2026-11-10: now phone-ready)
+- One async `Db` interface (`lib/pg.ts`), two engines: **hosted** = real Postgres through `DATABASE_URL` (Neon recommended); **local/tests** =
+  PGlite (Postgres inside Node, folder `.data/pg`). SQL uses `?` placeholders. Postgres gotchas already hit: `double precision` not `real`,
+  subselects need an alias, no `count(*)` (bigint).
+- Vercel has no persistent disk, so the **brain lives in the database** (`settings.brain`, seeded from `BRAIN.md` the first time) and the
+  encryption key must be `COMPASS_KEY` (32 bytes base64; the app refuses to start on Vercel without it).
+- **Login:** one password, `COMPASS_PASSWORD`, HMAC-signed 30-day cookie (`lib/auth.ts`), guarded by `src/proxy.ts` (pages redirect to
+  `/login`, APIs get 401). On Vercel with no password it returns 503 and serves nothing: it fails closed. Wrong-password limit: 8 per 15 min per IP
+  (in memory, per instance). Changing the password signs every device out.
+- `COMPASS_TZ` (default Asia/Kolkata) decides what "today" and the greeting are, because servers run UTC.
+- Installable as a phone app (manifest + generated icons). Tapping a task opens the editor (every field, quick-move, delete).
+- "Get new ideas" (Ideas page) asks Claude for 5 unproven ideas with the cheapest test each; nothing is saved until you press Keep.
+- Deploy: `vercel --prod` from this folder with `DATABASE_URL`, `COMPASS_PASSWORD`, `COMPASS_KEY` set (and `regions` near the database).
+
+## Rules that matter
+- **The assistant never changes data.** Suggested tasks arrive as a fenced ```tasks block that is parsed and shown as buttons; nothing is
+  added until the person presses one. Unknown zones in a suggestion are dropped.
+- **Seeds are the person's real situation as of 2026-11-10** (from the central CLAUDE.md), not measured data: the $300 is their own
+  figure, the ideas are unproven. Replace them; seeding runs once (`settings.seeded`).
+- **Dates are built by hand, never with `Intl`/`toLocale*`** (hydration error 418). Weeks run Monday to Sunday; due dates are `YYYY-MM-DD` strings.
+- **"This month" is the real last day of the month**, so late in the month it shows under next week, which is where it is due.
+- **Focus score** (`focusScore` in `store.ts`): money x3, plus how soon, plus priority, plus 1 if started. Pure and tested.
+- Hidden hover controls must be `pointer-events-none` until shown, or they swallow taps on phones.
+- Models are listed in `lib/ai.ts` (`MODELS`); default `claude-sonnet-5-5`. A wrong model id comes back as a plain message.
+
+## Layout
+`src/lib`: `dates` (pure), `db` (migrations and seed), `store` (all reads and writes), `ai` (snapshot, prompt, proposals, the call),
+`brain` (in the database), `secrets` (AES-GCM for the key), `api` (route wrapper), `runtime` (the one db per process), `pg` (Postgres/PGlite), `auth` (login cookie).
+`src/app`: pages (Today, Plan, Zones, Money, Ideas, Routine, Assistant, Brain, Settings) and `api/*`. `src/components`: client pieces.
+
+## Not built (say so, do not assume)
+Drag and drop between columns (use the Move menu), recurring tasks, a calendar view, reminders or
+notifications, importing the real revenue from `/admin` or Dodo (type the numbers in), and streaming answers.
