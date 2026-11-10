@@ -2,13 +2,14 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { LogOut, BookOpen, CalendarRange, Compass, Layers, Lightbulb, MessageSquare, Repeat, Settings, Sun, Wallet } from 'lucide-react';
+import { Activity, LogOut, BookOpen, CalendarRange, Compass, Layers, Lightbulb, MessageSquare, Repeat, Settings, Sun, Wallet } from 'lucide-react';
 
 const NAV = [
   { href: '/', label: 'Today', icon: Sun },
   { href: '/plan', label: 'Plan', icon: CalendarRange },
   { href: '/zones', label: 'Zones', icon: Layers },
   { href: '/money', label: 'Money', icon: Wallet },
+  { href: '/pulse', label: 'Pulse', icon: Activity },
   { href: '/ideas', label: 'Ideas', icon: Lightbulb },
   { href: '/routine', label: 'Routine', icon: Repeat },
   { href: '/assistant', label: 'Assistant', icon: MessageSquare },

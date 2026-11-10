@@ -193,5 +193,41 @@ yes('a tampered expiry is rejected', !(await auth.checkSession(`99999999999999.$
 yes('garbage and nothing are rejected', !(await auth.checkSession('abc', 'pw')) && !(await auth.checkSession(undefined, 'pw')));
 yes('same() compares exactly', auth.same('abc', 'abc') && !auth.same('abc', 'abd') && !auth.same('abc', 'abcd'));
 
+console.log('pulse');
+const pulse = await import('../src/lib/pulse');
+const NOW = Date.parse('2026-11-10T12:00:00Z'); const ago = (d: number) => new Date(NOW - d * 86_400_000).toISOString();
+const pays = [
+  { payment_id: 'a', created_at: ago(1), status: 'succeeded', total_amount: 499, currency: 'USD', customer: { customer_id: 'c1' }, metadata: { product: 'listlift' } },
+  { payment_id: 'b', created_at: ago(2), status: 'succeeded', total_amount: 199, currency: 'USD', customer: { customer_id: 'c2' }, metadata: { product: 'listlift' } },
+  { payment_id: 'c', created_at: ago(3), status: 'failed', total_amount: 499, currency: 'USD', customer: { customer_id: 'c3' } },
+  { payment_id: 'd', created_at: ago(9), status: 'succeeded', total_amount: 499, currency: 'USD', customer: { customer_id: 'c1' } },
+  { payment_id: 'e', created_at: ago(10), status: 'succeeded', total_amount: 29900, currency: 'INR', customer: { customer_id: 'c4' } },
+  { payment_id: 'f', created_at: ago(20), status: 'succeeded', total_amount: 499, currency: 'USD', customer: { customer_id: 'c2' } },
+];
+const sum = pulse.summariseDodo(pays, [{ status: 'active' }, { status: 'active', cancel_at_next_billing_date: true }, { status: 'cancelled' }], NOW);
+eq('this-week USD revenue counts only succeeded payments', sum.revenue.find((r) => r.currency === 'USD')?.thisWeek, 6.98);
+eq('last-week USD revenue', sum.revenue.find((r) => r.currency === 'USD')?.lastWeek, 4.99);
+eq('INR is kept separate and in major units', sum.revenue.find((r) => r.currency === 'INR')?.lastWeek, 299);
+eq('a customer who paid earlier is not new', [sum.newCustomersThisWeek, sum.newCustomersLastWeek], [0, 2]);
+eq('failed payments this week', sum.failedThisWeek, 1);
+eq('subscriptions: active and ending', [sum.activeSubscriptions, sum.cancellingSubscriptions], [2, 1]);
+eq('products this week', sum.byProductThisWeek, [{ product: 'listlift', payments: 2 }]);
+const none = await pulse.fetchDodo({}, (async () => { throw new Error('no network expected'); }) as never, NOW);
+eq('Dodo with no key is "not set up" and makes no request', none.state, 'not-set-up');
+const dodoCalls: string[] = [];
+const fakeDodo = (async (url: string, init?: RequestInit) => { dodoCalls.push(url + '|' + (init?.headers as Record<string, string>).Authorization); return new Response(JSON.stringify({ items: url.includes('/payments') ? pays : [{ status: 'active' }] }), { status: 200 }); }) as never;
+const live = await pulse.fetchDodo({ DODO_API_KEY: 'k', DODO_ENV: 'live' }, fakeDodo, NOW);
+yes('Dodo ready, sends the bearer key to the live host, only GETs', live.state === 'ready' && dodoCalls.every((s) => s.startsWith('https://live.dodopayments.com/') && s.endsWith('|Bearer k')), dodoCalls.join(','));
+const bad = await pulse.fetchDodo({ DODO_API_KEY: 'k' }, (async () => new Response('', { status: 401 })) as never, NOW);
+yes('a refused key says so in plain words', bad.state === 'error' && /refused the key/.test(bad.why));
+eq('Nexora with no url is "not set up"', (await pulse.fetchNexora({}, (async () => { throw new Error('x'); }) as never)).state, 'not-set-up');
+const nx = { ok: true, generatedAt: 'x', signups: { thisWeek: 9, lastWeek: 6 }, uninstalls: { thisWeek: 4, lastWeek: 5, byProductThisWeek: {}, reasonsThisWeek: ['too slow'] }, usage: { thisWeek: { listlift: { events: 50, items: 900, users: 20 } }, lastWeek: {} }, entitledNow: { total: 80, byProduct: { listlift: 60 }, expiringIn7Days: 12 } };
+const nxr = await pulse.fetchNexora({ NEXORA_PULSE_URL: 'https://x/api/pulse', NEXORA_PULSE_TOKEN: 't' }, (async (_u: string, i?: RequestInit) => { yes('Nexora sends the bearer token', (i?.headers as Record<string, string>).Authorization === 'Bearer t'); return new Response(JSON.stringify(nx), { status: 200 }); }) as never);
+eq('Nexora feed parsed', nxr.state, 'ready');
+const txt = pulse.pulseText({ generatedAt: 'x', dodo: live, nexora: nxr });
+yes('pulse text carries the real numbers', /\$6\.98/.test(txt) && /Signups[^\n]*: 9 vs 6/.test(txt) && /12 run out/.test(txt), txt);
+const txt2 = pulse.pulseText({ generatedAt: 'x', dodo: { state: 'not-set-up', why: 'no key' }, nexora: { state: 'error', why: 'down' } });
+yes('missing sources tell the assistant not to invent numbers', /Do not state any revenue/.test(txt2) && /Do not state any signup/.test(txt2));
+
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');
 process.exit(failed ? 1 : 0);

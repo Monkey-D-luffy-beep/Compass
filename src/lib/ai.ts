@@ -1,3 +1,4 @@
+import { getPulse, pulseText } from './pulse';
 import type { Db } from './pg';
 import { bucketOf, BUCKET_LABEL, dayLabel, monthLabel, todayStr, weekEnd, type When } from './dates';
 import { InputError } from './errors';
@@ -148,12 +149,21 @@ export async function ask(db: Db, secretKey: Buffer, brain: string, question: st
   const apiKey = await readKey(db, secretKey);
   const history = (await listMessages(db, 10)).map((m) => ({ role: m.role, content: m.content }));
   while (history.length && history[0].role !== 'user') history.shift();
-  const system = systemPrompt(brain, await snapshot(db));
+  const system = systemPrompt(brain, (await snapshot(db)) + (await pulseBlock()));
   const answer = await callClaude(apiKey, await currentModel(db), system, [...history, { role: 'user', content: q }], 1800, f);
   const { text, proposals } = extractProposals(answer, (await listZones(db)).map((z) => z.name));
   await addMessage(db, 'user', q);
   await addMessage(db, 'assistant', text, proposals);
   return listMessages(db, 2);
+}
+
+/** The business pulse as extra snapshot text, or nothing when neither source is set up (or it fails: the answer must never depend on it). */
+async function pulseBlock(): Promise<string> {
+  try {
+    const p = await getPulse();
+    if (p.dodo.state === 'not-set-up' && p.nexora.state === 'not-set-up') return '';
+    return '\n\n' + pulseText(p);
+  } catch { return ''; }
 }
 
 export async function testKey(db: Db, secretKey: Buffer, f: FetchLike = fetch): Promise<string> {
