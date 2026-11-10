@@ -152,10 +152,11 @@ export async function fetchNexora(env: Env, f: FetchLike = fetch): Promise<Part<
 /** Both sources, cached for 10 minutes per server instance so asking the assistant three questions does not hit Dodo three times. */
 export async function getPulse(env: Env = process.env, opts: { fresh?: boolean; f?: FetchLike } = {}): Promise<Pulse> {
   const c = g.__compass_pulse;
-  if (!opts.fresh && c && Date.now() - c.at < 10 * 60_000) return c.value;
+  const ttl = c && (c.value.dodo.state === 'error' || c.value.nexora.state === 'error') ? 60_000 : 10 * 60_000;   // a failure is retried after a minute
+  if (!opts.fresh && c && Date.now() - c.at < ttl) return c.value;
   const [dodo, nexora] = await Promise.all([fetchDodo(env, opts.f), fetchNexora(env, opts.f)]);
   const value: Pulse = { generatedAt: new Date().toISOString(), dodo, nexora };
-  if (dodo.state !== 'error' && nexora.state !== 'error') g.__compass_pulse = { at: Date.now(), value };
+  g.__compass_pulse = { at: Date.now(), value };
   return value;
 }
 
