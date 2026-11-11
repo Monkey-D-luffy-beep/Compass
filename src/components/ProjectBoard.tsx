@@ -6,6 +6,7 @@ import { call } from '@/lib/client';
 import { dayLabel } from '@/lib/dates';
 import type { Task, Zone } from '@/lib/store';
 import { TaskEditor } from './TaskEditor';
+import { useToast } from './ds-client';
 
 const COLORS = ['#7aa2ff', '#4ade80', '#f5a524', '#b794f6', '#4fd1c5', '#f87171', '#f472b6', '#a3e635'];
 const ORDER = { doing: 0, todo: 1, done: 2 } as const;
@@ -45,7 +46,7 @@ function TaskLine({ task, onChange, onArchive, onEdit }: { task: Task; onChange:
 }
 
 function Block({ zone, initial }: { zone: Zone; initial: Task[] }) {
-  const router = useRouter();
+  const router = useRouter(); const toast = useToast();
   const [tasks, setTasks] = useState(initial);
   const [title, setTitle] = useState('');
   const [adding, setAdding] = useState(false);
@@ -76,7 +77,7 @@ function Block({ zone, initial }: { zone: Zone; initial: Task[] }) {
   async function archiveAllDone() {
     const gone = tasks.filter((t) => t.status === 'done');
     setTasks((all) => all.filter((t) => t.status !== 'done'));
-    try { await call('/api/tasks/archive-done', 'POST', { zone: zone.id }); router.refresh(); }
+    try { await call('/api/tasks/archive-done', 'POST', { zone: zone.id }); toast(`Archived ${gone.length} done task${gone.length === 1 ? '' : 's'}`); router.refresh(); }
     catch (e) { setTasks((all) => [...all, ...gone]); setError(e instanceof Error ? e.message : 'Could not archive.'); }
   }
   async function saveName() {

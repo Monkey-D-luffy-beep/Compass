@@ -43,7 +43,8 @@ export async function openPostgres(url: string): Promise<Db> {
   const { Pool } = await import('pg');
   // Hosted Postgres needs TLS; a local one does not.
   const local = /@(localhost|127\.0\.0\.1)/.test(url);
-  const pool = new Pool({ connectionString: url, max: 3, ssl: local ? undefined : { rejectUnauthorized: false } });
+  // Serverless: many short-lived instances share the database's small connection allowance, so each keeps only a couple.
+  const pool = new Pool({ connectionString: url, max: process.env.VERCEL ? 2 : 3, idleTimeoutMillis: 10_000, ssl: local ? undefined : { rejectUnauthorized: false } });
   const make = (c: { query(sql: string, p?: unknown[]): Promise<{ rows: unknown[]; rowCount: number | null }> }, inner: boolean): Db =>
     wrap(c as Queryable, async (s) => { await c.query(s); },
       async (fn) => {

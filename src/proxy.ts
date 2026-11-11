@@ -19,5 +19,5 @@ export async function proxy(req: NextRequest) {
 
 export const config = {
   // Not the icons or manifest, which the browser fetches without the cookie when installing to a home screen.
-  matcher: ['/((?!_next/|favicon\\.ico|icon|apple-icon|manifest\\.webmanifest).*)'],
+  matcher: ['/((?!_next/|favicon\\.ico|icon|apple-icon|logo-|manifest\\.webmanifest).*)'],
 };

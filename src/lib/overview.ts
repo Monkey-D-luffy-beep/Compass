@@ -1,5 +1,5 @@
 /** The bird's-eye view: every zone at a glance and what actually got done lately. Pure, so it is tested without a database. */
-import { addDays, bucketOf, todayStr } from './dates';
+import { addDays, bucketOf, todayStr, weekStart } from './dates';
 import type { Task, Zone } from './store';
 
 export interface ZoneStat { zone: Zone; open: number; overdue: number; doneWeek: number; addedWeek: number; moneyOpen: number; lastDoneDay: string | null; next: Task[] }
@@ -47,4 +47,23 @@ export function buildOverview(zones: Zone[], tasks: Task[], today: string): Over
     stalled: list.filter((s) => s.open > 0 && (!s.lastDoneDay || s.lastDoneDay < stallFrom)),
     comingUp: comingUp.sort((a, b) => (a.dueOn ?? '9').localeCompare(b.dueOn ?? '9') || b.money - a.money).slice(0, 8),
   };
+}
+
+/** Days in a row, counting back from today, with at least one task finished. Today not finished yet does not break it. */
+export function doneStreak(tasks: Task[], today: string): number {
+  const days = new Set<string>();
+  for (const t of tasks) { if (t.status === 'done') { const d = dayOf(t.doneAt); if (d) days.add(d); } }
+  let cursor = days.has(today) ? today : addDays(today, -1), n = 0;
+  while (days.has(cursor)) { n++; cursor = addDays(cursor, -1); }
+  return n;
+}
+
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+/** Monday to Sunday of the week containing `today`: tasks due each day, and how many of those are done. */
+export function weekDays(tasks: Task[], today: string) {
+  const start = weekStart(today);
+  return WEEKDAYS.map((label, i) => {
+    const key = addDays(start, i); const due = tasks.filter((t) => t.dueOn === key);
+    return { key, label, date: Number(key.slice(8)), total: due.length, done: due.filter((t) => t.status === 'done').length, today: key === today };
+  });
 }

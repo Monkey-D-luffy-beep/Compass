@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useRef, useState } from 'react';
-import { Trash2, X } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import { call } from '@/lib/client';
+import { Modal } from './ds-client';
 import type { Task } from '@/lib/store';
 import type { When } from '@/lib/dates';
 
@@ -26,13 +27,7 @@ export function TaskEditor({ task, onClose, onSaved }: { task: Task; onClose: ()
   const first = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => { call<{ id: string; name: string }[]>('/api/zones', 'GET').then(setZones).catch(() => setZones([{ id: task.zoneId, name: task.zoneName }])); }, [task.zoneId, task.zoneName]);
-  useEffect(() => {
-    first.current?.focus();
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', onKey);
-    const prev = document.body.style.overflow; document.body.style.overflow = 'hidden';
-    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
-  }, [onClose]);
+  useEffect(() => { first.current?.focus(); }, []);
 
   async function save(e: React.FormEvent) {
     e.preventDefault(); setError(null); setBusy(true);
@@ -53,13 +48,12 @@ export function TaskEditor({ task, onClose, onSaved }: { task: Task; onClose: ()
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label="Edit task" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <form onSubmit={save} className="card flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-b-none sm:max-w-xl sm:rounded-b-[var(--radius,16px)]">
-        <header className="flex items-center justify-between border-b border-line px-4 py-3">
-          <h2 className="font-semibold">Edit task</h2>
-          <button type="button" className="rounded-lg p-2 text-muted hover:text-ink" aria-label="Close" onClick={onClose}><X className="h-5 w-5" /></button>
-        </header>
-        <div className="space-y-4 overflow-y-auto px-4 py-4">
+    <Modal title="Edit task" onClose={onClose}
+      footer={<>
+        <button type="button" className="inline-flex items-center gap-1.5 rounded-lg px-2 py-2 text-[14px] font-semibold text-muted hover:text-bad" onClick={remove} disabled={busy}><Trash2 className="h-4 w-4" />Delete</button>
+        <div className="flex gap-2"><button type="button" className="btn" onClick={onClose}>Cancel</button><button type="submit" form="task-edit-form" className="btn btn-primary" disabled={busy || !title.trim()}>Save</button></div>
+      </>}>
+      <form id="task-edit-form" onSubmit={save} className="space-y-4">
           <textarea ref={first} className="textarea !text-[16px]" rows={2} value={title} onChange={(e) => setTitle(e.target.value)} aria-label="Task" />
           <textarea className="textarea !text-[16px]" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes (optional)" aria-label="Notes" />
 
@@ -73,7 +67,7 @@ export function TaskEditor({ task, onClose, onSaved }: { task: Task; onClose: ()
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <label className="block"><span className="label mb-1.5 block">Zone</span>
+            <label className="block"><span className="label mb-1.5 block">Project</span>
               <select className="select !text-[16px]" value={zone} onChange={(e) => setZone(e.target.value)}>{(zones.length ? zones : [{ id: task.zoneId, name: task.zoneName }]).map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}</select></label>
             <label className="block"><span className="label mb-1.5 block">Status</span>
               <select className="select !text-[16px]" value={status} onChange={(e) => setStatus(e.target.value as Task['status'])}><option value="todo">Planned</option><option value="doing">In progress</option><option value="done">Done</option></select></label>
@@ -85,12 +79,7 @@ export function TaskEditor({ task, onClose, onSaved }: { task: Task; onClose: ()
               <input className="input !text-[16px]" inputMode="numeric" value={effort} onChange={(e) => setEffort(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="30" /></label>
           </div>
           {error && <p role="alert" className="text-bad">{error}</p>}
-        </div>
-        <footer className="flex items-center justify-between gap-3 border-t border-line px-4 py-3">
-          <button type="button" className="inline-flex items-center gap-1.5 rounded-lg px-2 py-2 text-[14px] text-faint hover:text-bad" onClick={remove} disabled={busy}><Trash2 className="h-4 w-4" />Delete</button>
-          <div className="flex gap-2"><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={busy || !title.trim()}>Save</button></div>
-        </footer>
       </form>
-    </div>
+    </Modal>
   );
 }

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Trash2 } from 'lucide-react';
 import { call } from '@/lib/client';
+import { useToast } from './ds-client';
 import type { Entry } from '@/lib/store';
 
 const DEFAULT_CATEGORIES = ['Salary', 'Software', 'Hosting', 'Domain', 'Ads', 'Tools', 'Tax', 'Study', 'Rent', 'Food', 'Travel', 'Other'];
@@ -10,7 +11,7 @@ const fmt = (n: number, c: string) => `${c === 'INR' ? '₹' : '$'}${String(Math
 
 /** Add an income or an expense, see the latest ones, and set the dollar-to-rupee rate used to add them together. */
 export function FinanceForms({ entries, rate, today }: { entries: Entry[]; rate: number; today: string }) {
-  const router = useRouter();
+  const router = useRouter(); const toast = useToast();
   const [type, setType] = useState<'expense' | 'income'>('expense');
   const [category, setCategory] = useState('');
   const [amount, setAmount] = useState('');
@@ -26,7 +27,7 @@ export function FinanceForms({ entries, rate, today }: { entries: Entry[]; rate:
 
   async function add(e: React.FormEvent) {
     e.preventDefault(); setBusy(true); setError(null);
-    try { await call('/api/entries', 'POST', { type, category, amount: Number(amount), currency, onDate, note }); setAmount(''); setNote(''); router.refresh(); }
+    try { await call('/api/entries', 'POST', { type, category, amount: Number(amount), currency, onDate, note }); setAmount(''); setNote(''); toast(type === 'income' ? 'Income added' : 'Expense added'); router.refresh(); }
     catch (err) { setError(err instanceof Error ? err.message : 'Could not save.'); }
     finally { setBusy(false); }
   }

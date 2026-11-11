@@ -6,6 +6,7 @@ import { call } from '@/lib/client';
 import { BUCKET_LABEL, bucketOf, dayLabel, type Bucket, type When } from '@/lib/dates';
 import type { Task } from '@/lib/store';
 import { TaskEditor } from './TaskEditor';
+import { PriorityDot, StatusBadge } from './ds';
 
 const MOVES: { when: When; label: string }[] = [
   { when: 'today', label: 'Today' }, { when: 'week', label: 'This week' }, { when: 'next', label: 'Next week' }, { when: 'month', label: 'This month' }, { when: 'later', label: 'Later' },
@@ -40,6 +41,8 @@ export function TaskRow({ task, today, showZone = true }: { task: Task; today: s
           {!task.dueOn && <span>{BUCKET_LABEL.later}</span>}
           {task.effort && <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />{task.effort >= 60 ? `${Math.round((task.effort / 60) * 10) / 10} h` : `${task.effort} min`}</span>}
           {task.kind !== 'build' && <span className="pill !py-0">{task.kind}</span>}
+          {task.status === 'doing' && <StatusBadge status="doing" />}
+          {task.priority !== 2 && <PriorityDot priority={task.priority} />}
         </div>
         {error && <p role="alert" className="mt-1 text-[12.5px] text-bad">{error}</p>}
       </div>

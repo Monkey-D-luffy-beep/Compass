@@ -32,6 +32,13 @@ Add the Anthropic API key on the Settings page (stored encrypted) or set `ANTHRO
 - Revenue = **settled amount net of tax** (`settlement_amount - settlement_tax`), never the customer-currency totals. "New customer" = first payment inside 28 days of history. Cached 10 min per server instance (1 min after a failure); the browser also keeps the last copy so the page shows at once.
 - `/overview` is built by the pure `lib/overview.ts` (tested). `app/loading.tsx` is the instant skeleton.
 
+## Design system (Pixel Quest, 2026-11-11)
+- Tokens live in `src/app/globals.css` (themes `cream` = default Day and `night`; every colour is a CSS variable, including the navy sidebar, gold accent and sunset sky). Titles, labels and big numbers use **Jersey 10** (`.font-pixel`, `.h-page`, `.h-card`, `.label`; one weight, no synthetic bold); body text stays Inter. Pixelify Sans was tried first and rejected: its f/fi/C glyphs read badly.
+- Reusable pieces: `components/ds.tsx` (PixelAvatar, StatusBadge, PriorityDot, StreakBadge, ProgressRing, StatCard, Panel, WeekBars, MiniCalendar, PixelScene) and `components/ds-client.tsx` (ToastProvider/useToast, Modal, FocusTimer, CaptureBar). Pages compose these; do not hand-roll cards.
+- Logo files are in `public/` (`logo-full.png`, `logo-emblem.png`, icons); the originals and the design reference are in `reference/` (git-ignored). The proxy matcher lets `logo-*` and `icon*` through without a session so the login page can show them.
+- Routine was removed on purpose (2026-11-11) even though the design reference still shows it. Do not re-add without being asked.
+- **Database connections:** on Vercel use Supabase's *transaction* pooler (port 6543) and at most 2 connections per instance. The session pooler (5432) ran out of slots (`EMAXCONNSESSION`) as soon as pages fetched in parallel.
+
 ## Rules that matter
 - **The assistant never changes data.** Suggested tasks arrive as a fenced ```tasks block that is parsed and shown as buttons; nothing is
   added until the person presses one. Unknown zones in a suggestion are dropped.

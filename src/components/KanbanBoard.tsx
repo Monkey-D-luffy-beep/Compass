@@ -6,6 +6,8 @@ import { call } from '@/lib/client';
 import { dayLabel } from '@/lib/dates';
 import type { Task, Zone } from '@/lib/store';
 import { TaskEditor } from './TaskEditor';
+import { PriorityDot } from './ds';
+import { useToast } from './ds-client';
 
 type Status = Task['status'];
 const COLUMNS: { status: Status; label: string; hint: string }[] = [
@@ -28,11 +30,11 @@ function Card({ task, onMove, onArchive, onEdit }: { task: Task; onMove: (t: Tas
         <button type="button" className="min-w-0 flex-1 text-left leading-snug" onClick={() => onEdit(task)} aria-label={`Edit: ${task.title}`}><span className="strike" data-done={done}>{task.title}</span></button>
       </div>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-        <span className="inline-flex min-w-0 items-center gap-1.5 text-[12.5px] text-muted"><span className="dot shrink-0" style={{ background: task.zoneColor }} /><span className="truncate">{task.zoneName}</span>{task.dueOn && <span className="text-faint">· {dayLabel(task.dueOn)}</span>}</span>
+        <span className="inline-flex min-w-0 items-center gap-1.5 text-[12.5px] text-muted"><span className="dot shrink-0" style={{ background: task.zoneColor }} /><span className="truncate">{task.zoneName}</span>{task.priority !== 2 && <PriorityDot priority={task.priority} />}{task.dueOn && <span className="text-faint">· {dayLabel(task.dueOn)}</span>}</span>
         <span className="flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
-          {prev && <button type="button" className="rounded-md p-1 text-faint hover:text-ink" aria-label={`Move back to ${prev === 'todo' ? 'planned' : 'in progress'}`} onClick={() => onMove(task, prev)}><ArrowLeft className="h-4 w-4" /></button>}
-          {next && <button type="button" className="rounded-md p-1 text-faint hover:text-ink" aria-label={`Move to ${next === 'doing' ? 'in progress' : 'done'}`} onClick={() => onMove(task, next)}><ArrowRight className="h-4 w-4" /></button>}
-          {done && <button type="button" className="rounded-md p-1 text-faint hover:text-ink" aria-label="Archive this task" title="Archive" onClick={() => onArchive(task)}><Archive className="h-4 w-4" /></button>}
+          {prev && <button type="button" className="tip rounded-md p-1 text-faint hover:text-ink" data-tip="Move back" aria-label={`Move back to ${prev === 'todo' ? 'planned' : 'in progress'}`} onClick={() => onMove(task, prev)}><ArrowLeft className="h-4 w-4" /></button>}
+          {next && <button type="button" className="tip rounded-md p-1 text-faint hover:text-ink" data-tip={next === 'doing' ? 'Start' : 'Mark done'} aria-label={`Move to ${next === 'doing' ? 'in progress' : 'done'}`} onClick={() => onMove(task, next)}><ArrowRight className="h-4 w-4" /></button>}
+          {done && <button type="button" className="tip rounded-md p-1 text-faint hover:text-ink" data-tip="Archive" aria-label="Archive this task" onClick={() => onArchive(task)}><Archive className="h-4 w-4" /></button>}
         </span>
       </div>
     </li>
@@ -41,7 +43,7 @@ function Card({ task, onMove, onArchive, onEdit }: { task: Task; onMove: (t: Tas
 
 /** Planned | In progress | Done. Drag a card, or use the arrows, or tick it. Every task carries its project. */
 export function KanbanBoard({ zones, tasks: initial, archived }: { zones: Zone[]; tasks: Task[]; archived: Task[] }) {
-  const router = useRouter();
+  const router = useRouter(); const toast = useToast();
   const [tasks, setTasks] = useState(initial);
   const [zoneId, setZoneId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
@@ -73,7 +75,7 @@ export function KanbanBoard({ zones, tasks: initial, archived }: { zones: Zone[]
   async function archiveAllDone() {
     const gone2 = tasks.filter((t) => t.status === 'done' && (!zoneId || t.zoneId === zoneId));
     setTasks((all) => all.filter((t) => !gone2.some((g) => g.id === t.id)));
-    try { for (const g of gone2) await call(`/api/tasks/${g.id}`, 'PATCH', { archived: true }); router.refresh(); }
+    try { for (const g of gone2) await call(`/api/tasks/${g.id}`, 'PATCH', { archived: true }); toast(`Archived ${gone2.length} task${gone2.length === 1 ? '' : 's'}`); router.refresh(); }
     catch (e) { setTasks((all) => [...all, ...gone2]); setError(e instanceof Error ? e.message : 'Could not archive.'); }
   }
   async function restore(t: Task) {

@@ -4,19 +4,18 @@ import { dayLabel, todayStr } from '@/lib/dates';
 import { getDb } from '@/lib/runtime';
 import { listTasks, listZones } from '@/lib/store';
 import { Bar, PageHead } from '@/components/ui';
+import { MiniCalendar, Panel, StatCard } from '@/components/ds';
 import { PulseGlance } from '@/components/PulseGlance';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Overview' };
 
-function Stat({ label, value, hint, bad }: { label: string; value: number; hint?: string; bad?: boolean }) {
-  return <div className="card card-pad"><p className="label">{label}</p><p className={`mt-2 text-[30px] font-semibold leading-none tabular-nums ${bad && value > 0 ? 'text-bad' : ''}`}>{value}</p>{hint && <p className="mt-2 text-[12.5px] text-faint">{hint}</p>}</div>;
-}
-
 export default async function Overview() {
   const db = await getDb(); const today = todayStr();
   const [zones, tasks] = await Promise.all([listZones(db), listTasks(db)]);
   const o = buildOverview(zones, tasks, today);
+  const dueCounts: Record<string, number> = {};
+  for (const x of tasks) if (x.dueOn && x.status !== 'done') dueCounts[x.dueOn] = (dueCounts[x.dueOn] ?? 0) + 1;
 
   return (
     <div className="space-y-7">
@@ -27,10 +26,10 @@ export default async function Overview() {
       <section aria-label="Work">
         <p className="label mb-2">Work, last 7 days</p>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <Stat label="Done this week" value={o.totals.doneWeek} hint={`${o.totals.doneToday} today`} />
-          <Stat label="Added this week" value={o.totals.addedWeek} />
-          <Stat label="Open now" value={o.totals.open} />
-          <Stat label="Overdue" value={o.totals.overdue} bad hint={o.totals.overdue ? 'Move it or drop it' : 'Nothing late'} />
+          <StatCard label="Done this week" value={o.totals.doneWeek} hint={`${o.totals.doneToday} today`} tone="good" />
+          <StatCard label="Added this week" value={o.totals.addedWeek} />
+          <StatCard label="Open now" value={o.totals.open} />
+          <StatCard label="Overdue" value={o.totals.overdue} tone={o.totals.overdue ? 'bad' : undefined} hint={o.totals.overdue ? 'Move it or drop it' : 'Nothing late'} />
         </div>
       </section>
 
@@ -58,7 +57,8 @@ export default async function Overview() {
         </div>
       </section>
 
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid gap-5 lg:grid-cols-[1fr_1fr_320px]">
+        <Panel title="Calendar" className="lg:order-last"><MiniCalendar today={today} counts={dueCounts} /></Panel>
         <section className="card card-pad" aria-label="Done">
           <p className="label">What got done</p>
           {o.wins.length === 0 ? <p className="mt-3 text-muted">Nothing finished in the last 7 days.</p> : (

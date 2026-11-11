@@ -241,6 +241,18 @@ eq('a task can be restored', (await store.listTasks(adb, { zoneId: az.id, archiv
 eq('archiving twice does nothing new', await store.archiveDone(adb, az.id), 1);
 eq('a renamed project keeps its tasks', [(await store.updateZone(adb, az.id, { name: 'Renamed' })).name, (await store.listTasks(adb, { zoneId: az.id })).length], ['Renamed', 3]);
 
+console.log('streak and week');
+const stT = (id: string, status: string, doneAt: string | null, dueOn: string | null): never => ({ id, zoneId: 'Z', zoneName: 'Z', zoneColor: '#fff', title: id, notes: null, status, dueOn, priority: 2, money: 0, kind: 'build', effort: null, createdAt: '2026-01-01T00:00:00.000Z', doneAt, archivedAt: null }) as never;
+const ovm = await import('../src/lib/overview');
+const doneOn = (d: string) => `${d}T08:00:00.000Z`;
+eq('streak counts back from today', ovm.doneStreak([stT('a', 'done', doneOn('2026-11-11'), null), stT('b', 'done', doneOn('2026-11-10'), null), stT('c', 'done', doneOn('2026-11-09'), null)], '2026-11-11'), 3);
+eq('today not finished yet does not break the streak', ovm.doneStreak([stT('b', 'done', doneOn('2026-11-10'), null), stT('c', 'done', doneOn('2026-11-09'), null)], '2026-11-11'), 2);
+eq('a missed day ends it', ovm.doneStreak([stT('a', 'done', doneOn('2026-11-11'), null), stT('c', 'done', doneOn('2026-11-08'), null)], '2026-11-11'), 1);
+eq('no finished tasks, no streak', ovm.doneStreak([stT('x', 'todo', null, '2026-11-11')], '2026-11-11'), 0);
+const wd = ovm.weekDays([stT('a', 'todo', null, '2026-11-11'), stT('b', 'done', doneOn('2026-11-11'), '2026-11-11'), stT('c', 'todo', null, '2026-11-15')], '2026-11-11');
+eq('week runs Monday to Sunday', [wd[0].key, wd[6].key, wd.length], ['2026-11-09', '2026-11-15', 7]);
+eq('Wednesday has two tasks, one done, and is marked as today', [wd[2].total, wd[2].done, wd[2].today, wd[6].total], [2, 1, true, 1]);
+
 console.log('auto-archive');
 const odb = await openMemory();
 const oz = await store.addZone(odb, { name: 'Old Done' });

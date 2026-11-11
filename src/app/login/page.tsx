@@ -1,6 +1,6 @@
 "use client";
 import { useState } from 'react';
-import { Compass } from 'lucide-react';
+import { PixelScene } from '@/components/ds';
 
 export default function Login() {
   const [password, setPassword] = useState(''); const [error, setError] = useState<string | null>(null); const [busy, setBusy] = useState(false);
@@ -14,9 +14,12 @@ export default function Login() {
     } catch { setError('Could not reach the server.'); setBusy(false); }
   }
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-bg px-5">
-      <form onSubmit={go} className="card card-pad w-full max-w-sm space-y-4">
-        <div className="flex items-center gap-2.5 text-[17px] font-semibold"><span className="grid h-8 w-8 place-items-center rounded-xl bg-accent text-bg"><Compass className="h-[18px] w-[18px]" /></span>Compass</div>
+    <div className="fixed inset-0 z-50 grid place-items-center overflow-auto bg-navy px-5 py-8">
+      <PixelScene className="absolute inset-0 h-full w-full" />
+      <form onSubmit={go} className="card card-pad relative w-full max-w-sm space-y-4">
+        {/* The wordmark is dark, so it always sits on its own cream plate, in either theme. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <div className="rounded-md bg-[#fbf4e4] px-3 py-2"><img src="/logo-full.png" alt="Compass: plan, focus, build, grow" className="mx-auto h-auto w-full max-w-[260px]" style={{ imageRendering: 'pixelated' }} /></div>
         <input className="input !text-[16px]" type="password" autoComplete="current-password" autoFocus value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" aria-label="Password" />
         {error && <p role="alert" className="text-bad">{error}</p>}
         <button className="btn btn-primary w-full" disabled={busy || !password}>{busy ? 'Signing in…' : 'Sign in'}</button>
