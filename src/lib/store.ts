@@ -98,6 +98,13 @@ export async function archiveDone(db: Db, zoneId?: string): Promise<number> {
   if (rows.length) await db.run(`update tasks set archived_at = ? where status = 'done' and archived_at is null${zoneId ? ' and zone_id = ?' : ''}`, zoneId ? [now(), zoneId] : [now()]);
   return rows.length;
 }
+/** Archive finished tasks that were done more than `days` days ago, so the Done column stays about this week. Returns how many. */
+export async function archiveOldDone(db: Db, days = 7, at = new Date()): Promise<number> {
+  const cutoff = new Date(at.getTime() - days * 86_400_000).toISOString();
+  const rows = await db.query("select id from tasks where status = 'done' and archived_at is null and done_at < ?", [cutoff]);
+  if (rows.length) await db.run("update tasks set archived_at = ? where status = 'done' and archived_at is null and done_at < ?", [at.toISOString(), cutoff]);
+  return rows.length;
+}
 export const deleteTask = async (db: Db, id: string) => { await db.run('delete from tasks where id = ?', [id]); };
 
 /** Which open tasks to look at first: money, then how soon, then priority. Pure so it can be tested. */

@@ -241,6 +241,16 @@ eq('a task can be restored', (await store.listTasks(adb, { zoneId: az.id, archiv
 eq('archiving twice does nothing new', await store.archiveDone(adb, az.id), 1);
 eq('a renamed project keeps its tasks', [(await store.updateZone(adb, az.id, { name: 'Renamed' })).name, (await store.listTasks(adb, { zoneId: az.id })).length], ['Renamed', 3]);
 
+console.log('auto-archive');
+const odb = await openMemory();
+const oz = await store.addZone(odb, { name: 'Old Done' });
+const o1 = await store.addTask(odb, { title: 'finished long ago', zone: oz.id }); const o2 = await store.addTask(odb, { title: 'finished today', zone: oz.id }); const o3 = await store.addTask(odb, { title: 'still planned', zone: oz.id });
+await store.updateTask(odb, o1.id, { status: 'done' }); await store.updateTask(odb, o2.id, { status: 'done' });
+await odb.run('update tasks set done_at = ? where id = ?', [new Date(Date.now() - 9 * 86_400_000).toISOString(), o1.id]);
+eq('only done work older than a week is archived', [await store.archiveOldDone(odb, 7), (await store.listTasks(odb, { zoneId: oz.id, archived: false })).map((t) => t.title).sort()], [1, ['finished today', 'still planned']]);
+eq('running it again archives nothing more', await store.archiveOldDone(odb, 7), 0);
+void o3;
+
 console.log('finance and ideas');
 const fin = await import('../src/lib/finance');
 const fdb = await openMemory();
