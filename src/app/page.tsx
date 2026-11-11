@@ -38,12 +38,16 @@ export default async function Today() {
         <h1 className="sr-only">{greet}, {name || 'Saurav'}</h1>
         {/* The banner is the supplied pixel-art image; its greeting is part of the picture. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/banner-hero.png" alt="" className="block h-auto min-h-[116px] w-full object-cover object-left" />
-        <div className="absolute right-3 top-3 flex flex-wrap items-center justify-end gap-2">
+        <img src="/banner-hero.webp" alt="" className="block h-auto min-h-[116px] w-full object-cover object-left" />
+        <div className="absolute right-3 top-3 hidden flex-wrap items-center justify-end gap-2 sm:flex">
           <span className="rounded-md border-2 border-outline bg-surface px-2.5 py-1 text-[13px] font-semibold text-ink shadow-[0_2px_0_var(--shadow)]">{dayLabel(today)}</span>
           <StreakBadge days={doneStreak(all, today)} />
         </div>
       </section>
+      <div className="flex flex-wrap items-center gap-2 sm:hidden">
+          <span className="rounded-md border-2 border-outline bg-surface px-2.5 py-1 text-[13px] font-semibold text-ink shadow-[0_2px_0_var(--shadow)]">{dayLabel(today)}</span>
+          <StreakBadge days={doneStreak(all, today)} />
+        </div>
       <CaptureBar zones={zones.map((z) => ({ id: z.id, name: z.name }))} />
 
       <div className="grid gap-5 lg:grid-cols-[1.3fr_1fr]">
