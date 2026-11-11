@@ -5,7 +5,6 @@ import { Check, Clock, Trash2 } from 'lucide-react';
 import { call } from '@/lib/client';
 import { BUCKET_LABEL, bucketOf, dayLabel, type Bucket, type When } from '@/lib/dates';
 import type { Task } from '@/lib/store';
-import { Money } from './ui';
 import { TaskEditor } from './TaskEditor';
 
 const MOVES: { when: When; label: string }[] = [
@@ -39,7 +38,6 @@ export function TaskRow({ task, today, showZone = true }: { task: Task; today: s
           {showZone && <span className="inline-flex items-center gap-1.5"><span className="dot" style={{ background: task.zoneColor }} />{task.zoneName}</span>}
           {task.dueOn && <span className={bucket === 'overdue' ? 'text-bad' : ''}>{bucket === 'overdue' ? 'Overdue · ' : ''}{dayLabel(task.dueOn)}</span>}
           {!task.dueOn && <span>{BUCKET_LABEL.later}</span>}
-          <Money n={task.money} />
           {task.effort && <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />{task.effort >= 60 ? `${Math.round((task.effort / 60) * 10) / 10} h` : `${task.effort} min`}</span>}
           {task.kind !== 'build' && <span className="pill !py-0">{task.kind}</span>}
         </div>

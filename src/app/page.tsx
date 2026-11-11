@@ -8,7 +8,6 @@ import { FocusAdvisor } from '@/components/FocusAdvisor';
 import { QuickAdd } from '@/components/QuickAdd';
 import { RoutineList } from '@/components/RoutineList';
 import { TaskRow } from '@/components/TaskRow';
-import { Money } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Today' };
@@ -45,7 +44,7 @@ export default async function Today() {
               {focus.map((t, i) => (
                 <li key={t.id} className="flex items-start gap-3">
                   <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-surface2 text-[13px] font-semibold">{i + 1}</span>
-                  <div className="min-w-0"><p className="leading-snug">{t.title}</p><p className="mt-0.5 flex items-center gap-3 text-[12.5px] text-muted"><span className="inline-flex items-center gap-1.5"><span className="dot" style={{ background: t.zoneColor }} />{t.zoneName}</span><Money n={t.money} />{t.dueOn && <span>{dayLabel(t.dueOn)}</span>}</p></div>
+                  <div className="min-w-0"><p className="leading-snug">{t.title}</p><p className="mt-0.5 flex items-center gap-3 text-[12.5px] text-muted"><span className="inline-flex items-center gap-1.5"><span className="dot" style={{ background: t.zoneColor }} />{t.zoneName}</span>{t.dueOn && <span>{dayLabel(t.dueOn)}</span>}</p></div>
                 </li>
               ))}
             </ol>

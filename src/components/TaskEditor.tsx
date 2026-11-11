@@ -17,7 +17,6 @@ export function TaskEditor({ task, onClose, onSaved }: { task: Task; onClose: ()
   const [notes, setNotes] = useState(task.notes ?? '');
   const [zone, setZone] = useState(task.zoneId);
   const [dueOn, setDueOn] = useState(task.dueOn ?? '');
-  const [money, setMoney] = useState(task.money);
   const [kind, setKind] = useState<string>(task.kind);
   const [effort, setEffort] = useState(task.effort ? String(task.effort) : '');
   const [priority, setPriority] = useState(task.priority);
@@ -38,7 +37,7 @@ export function TaskEditor({ task, onClose, onSaved }: { task: Task; onClose: ()
   async function save(e: React.FormEvent) {
     e.preventDefault(); setError(null); setBusy(true);
     try {
-      await call(`/api/tasks/${task.id}`, 'PATCH', { title, notes: notes.trim() || null, zone, dueOn: dueOn || null, money, kind, effort: effort ? Number(effort) : null, priority, status });
+      await call(`/api/tasks/${task.id}`, 'PATCH', { title, notes: notes.trim() || null, zone, dueOn: dueOn || null, kind, effort: effort ? Number(effort) : null, priority, status });
       onSaved(); onClose();
     } catch (err) { setError(err instanceof Error ? err.message : 'Could not save.'); setBusy(false); }
   }
@@ -77,9 +76,7 @@ export function TaskEditor({ task, onClose, onSaved }: { task: Task; onClose: ()
             <label className="block"><span className="label mb-1.5 block">Zone</span>
               <select className="select !text-[16px]" value={zone} onChange={(e) => setZone(e.target.value)}>{(zones.length ? zones : [{ id: task.zoneId, name: task.zoneName }]).map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}</select></label>
             <label className="block"><span className="label mb-1.5 block">Status</span>
-              <select className="select !text-[16px]" value={status} onChange={(e) => setStatus(e.target.value as Task['status'])}><option value="todo">To do</option><option value="doing">In progress</option><option value="done">Done</option></select></label>
-            <label className="block"><span className="label mb-1.5 block">Brings money</span>
-              <select className="select !text-[16px]" value={money} onChange={(e) => setMoney(Number(e.target.value))}><option value={0}>No</option><option value={1}>Indirectly</option><option value={2}>Likely</option><option value={3}>Directly</option></select></label>
+              <select className="select !text-[16px]" value={status} onChange={(e) => setStatus(e.target.value as Task['status'])}><option value="todo">Planned</option><option value="doing">In progress</option><option value="done">Done</option></select></label>
             <label className="block"><span className="label mb-1.5 block">Priority</span>
               <select className="select !text-[16px]" value={priority} onChange={(e) => setPriority(Number(e.target.value))}><option value={1}>High</option><option value={2}>Normal</option><option value={3}>Low</option></select></label>
             <label className="block"><span className="label mb-1.5 block">Kind</span>

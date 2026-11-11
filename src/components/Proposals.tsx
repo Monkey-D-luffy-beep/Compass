@@ -5,7 +5,6 @@ import { Check, Plus } from 'lucide-react';
 import { call } from '@/lib/client';
 import { BUCKET_LABEL, type Bucket } from '@/lib/dates';
 import type { Message } from '@/lib/store';
-import { Money } from './ui';
 
 const LABEL: Record<string, string> = { today: BUCKET_LABEL.today, week: BUCKET_LABEL.week, next: BUCKET_LABEL.next, month: BUCKET_LABEL.month, later: BUCKET_LABEL.later };
 
@@ -30,7 +29,7 @@ export function Proposals({ items }: { items: Message['proposals'] }) {
           <li key={i} className="flex items-center gap-3">
             <button type="button" onClick={() => add(i)} disabled={added.has(i)} className="btn !px-2 !py-1 shrink-0" aria-label={`Add: ${p.title}`}>{added.has(i) ? <Check className="h-4 w-4 text-good" /> : <Plus className="h-4 w-4" />}</button>
             <span className="min-w-0 flex-1">{p.title}</span>
-            <span className="shrink-0 text-[12.5px] text-muted">{p.zone} · {LABEL[p.when as Bucket] ?? p.when} <Money n={p.money} /></span>
+            <span className="shrink-0 text-[12.5px] text-muted">{p.zone} · {LABEL[p.when as Bucket] ?? p.when}</span>
           </li>
         ))}
       </ul>

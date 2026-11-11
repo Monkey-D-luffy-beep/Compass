@@ -3,7 +3,7 @@ import { buildOverview } from '@/lib/overview';
 import { dayLabel, todayStr } from '@/lib/dates';
 import { getDb } from '@/lib/runtime';
 import { listTasks, listZones } from '@/lib/store';
-import { Bar, Money, PageHead } from '@/components/ui';
+import { Bar, PageHead } from '@/components/ui';
 import { PulseGlance } from '@/components/PulseGlance';
 
 export const dynamic = 'force-dynamic';
@@ -51,7 +51,7 @@ export default async function Overview() {
                 <span className="text-[12.5px] text-muted">{s.open} open{s.overdue ? <span className="text-bad"> · {s.overdue} late</span> : ''}</span>
               </div>
               <div className="mt-3"><Bar value={s.doneWeek} max={Math.max(1, s.doneWeek + s.open)} color={s.zone.color} /></div>
-              <p className="mt-2 text-[12.5px] text-muted">{s.doneWeek} done this week{s.addedWeek ? ` · ${s.addedWeek} added` : ''}{s.moneyOpen ? ` · ${s.moneyOpen} that can earn` : ''}</p>
+              <p className="mt-2 text-[12.5px] text-muted">{s.doneWeek} done this week{s.addedWeek ? ` · ${s.addedWeek} added` : ''}</p>
               {s.next.length > 0 && <ul className="mt-3 space-y-1 text-[13.5px]">{s.next.map((t) => <li key={t.id} className="truncate text-muted">{t.title}</li>)}</ul>}
             </Link>
           ))}
@@ -66,7 +66,7 @@ export default async function Overview() {
               {o.wins.map((w) => (
                 <div key={w.day}>
                   <p className="text-[12.5px] text-faint">{dayLabel(w.day)} · {w.tasks.length}</p>
-                  <ul className="mt-1 space-y-1">{w.tasks.map((t) => <li key={t.id} className="flex items-start gap-2"><span className="dot mt-2 shrink-0" style={{ background: t.zoneColor }} /><span className="leading-snug">{t.title}</span><Money n={t.money} /></li>)}</ul>
+                  <ul className="mt-1 space-y-1">{w.tasks.map((t) => <li key={t.id} className="flex items-start gap-2"><span className="dot mt-2 shrink-0" style={{ background: t.zoneColor }} /><span className="leading-snug">{t.title}</span></li>)}</ul>
                 </div>
               ))}
             </div>

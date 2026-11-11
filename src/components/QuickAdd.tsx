@@ -13,7 +13,6 @@ export function QuickAdd({ zones, when, defaultZone, compact = false }: { zones:
   const [title, setTitle] = useState('');
   const [zone, setZone] = useState(defaultZone ?? zones[0]?.id ?? '');
   const [pick, setPick] = useState<When>(when ?? 'week');
-  const [money, setMoney] = useState(0);
   const [kind, setKind] = useState('build');
   const [more, setMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,8 +23,8 @@ export function QuickAdd({ zones, when, defaultZone, compact = false }: { zones:
     start(async () => {
       setError(null);
       try {
-        await call('/api/tasks', 'POST', { title, zone: defaultZone ?? zone, when: when ?? pick, money, kind });
-        setTitle(''); setMoney(0); router.refresh();
+        await call('/api/tasks', 'POST', { title, zone: defaultZone ?? zone, when: when ?? pick, kind });
+        setTitle(''); router.refresh();
       } catch (err) { setError(err instanceof Error ? err.message : 'Could not add it.'); }
     });
   }
@@ -47,9 +46,6 @@ export function QuickAdd({ zones, when, defaultZone, compact = false }: { zones:
             <option value="today">Today</option><option value="week">This week</option><option value="next">Next week</option><option value="month">This month</option><option value="later">Later</option>
           </select>
         )}
-        <select className="select !w-auto" value={money} onChange={(e) => setMoney(Number(e.target.value))} aria-label="How directly it earns money">
-          <option value={0}>No money link</option><option value={1}>$ supports revenue</option><option value={2}>$$ likely revenue</option><option value={3}>$$$ direct revenue</option>
-        </select>
         {!compact && <button type="button" className="text-muted hover:text-ink" onClick={() => setMore(!more)}>{more ? 'Less' : 'More'}</button>}
         {more && (
           <select className="select !w-auto" value={kind} onChange={(e) => setKind(e.target.value)} aria-label="Kind of work">
