@@ -1,13 +1,13 @@
 "use client";
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Archive, ArrowLeft, ArrowRight, Check, Plus, RotateCcw } from 'lucide-react';
+import { Archive, ArrowLeft, ArrowRight, Check, Plus, RotateCcw, SlidersHorizontal } from 'lucide-react';
 import { call } from '@/lib/client';
 import { dayLabel } from '@/lib/dates';
 import type { Task, Zone } from '@/lib/store';
 import { TaskEditor } from './TaskEditor';
-import { PriorityDot } from './ds';
-import { useToast } from './ds-client';
+import { Empty, PriorityDot } from './ds';
+import { InlineTitle, useToast } from './ds-client';
 
 type Status = Task['status'];
 const COLUMNS: { status: Status; label: string; hint: string }[] = [
@@ -16,22 +16,24 @@ const COLUMNS: { status: Status; label: string; hint: string }[] = [
   { status: 'done', label: 'Done', hint: 'Finished this week' },
 ];
 
-function Card({ task, onMove, onArchive, onEdit }: { task: Task; onMove: (t: Task, s: Status) => void; onArchive: (t: Task) => void; onEdit: (t: Task) => void }) {
+function Card({ task, onMove, onArchive, onEdit, onRename }: { task: Task; onMove: (t: Task, s: Status) => void; onArchive: (t: Task) => void; onEdit: (t: Task) => void; onRename: (t: Task, title: string) => Promise<void> }) {
   const done = task.status === 'done';
+  const [typing, setTyping] = useState(false);   // a draggable parent would stop you selecting text while typing
   const prev: Status | null = task.status === 'doing' ? 'todo' : task.status === 'done' ? 'doing' : null;
   const next: Status | null = task.status === 'todo' ? 'doing' : task.status === 'doing' ? 'done' : null;
   return (
-    <li draggable onDragStart={(e) => { e.dataTransfer.setData('text/plain', task.id); e.dataTransfer.effectAllowed = 'move'; }}
+    <li draggable={!typing} onDragStart={(e) => { e.dataTransfer.setData('text/plain', task.id); e.dataTransfer.effectAllowed = 'move'; }}
       className="task-in group cursor-grab rounded-xl border border-line bg-surface2 p-3 active:cursor-grabbing">
       <div className="flex items-start gap-2.5">
         <button type="button" className="check mt-0.5" data-on={done} aria-label={done ? 'Mark as not done' : 'Mark as done'} onClick={() => onMove(task, done ? 'todo' : 'done')}>
           {done && <Check className="h-3 w-3" strokeWidth={3} />}
         </button>
-        <button type="button" className="min-w-0 flex-1 text-left leading-snug" onClick={() => onEdit(task)} aria-label={`Edit: ${task.title}`}><span className="strike" data-done={done}>{task.title}</span></button>
+        <div className="min-w-0 flex-1"><InlineTitle value={task.title} done={done} onSave={(v) => onRename(task, v)} onEditing={setTyping} /></div>
       </div>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
         <span className="inline-flex min-w-0 items-center gap-1.5 text-[12.5px] text-muted"><span className="dot shrink-0" style={{ background: task.zoneColor }} /><span className="truncate">{task.zoneName}</span>{task.priority !== 2 && <PriorityDot priority={task.priority} />}{task.dueOn && <span className="text-faint">· {dayLabel(task.dueOn)}</span>}</span>
         <span className="flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
+          <button type="button" className="tip rounded-md p-1 text-faint hover:text-ink" data-tip="Details" aria-label="Open task details" onClick={() => onEdit(task)}><SlidersHorizontal className="h-4 w-4" /></button>
           {prev && <button type="button" className="tip rounded-md p-1 text-faint hover:text-ink" data-tip="Move back" aria-label={`Move back to ${prev === 'todo' ? 'planned' : 'in progress'}`} onClick={() => onMove(task, prev)}><ArrowLeft className="h-4 w-4" /></button>}
           {next && <button type="button" className="tip rounded-md p-1 text-faint hover:text-ink" data-tip={next === 'doing' ? 'Start' : 'Mark done'} aria-label={`Move to ${next === 'doing' ? 'in progress' : 'done'}`} onClick={() => onMove(task, next)}><ArrowRight className="h-4 w-4" /></button>}
           {done && <button type="button" className="tip rounded-md p-1 text-faint hover:text-ink" data-tip="Archive" aria-label="Archive this task" onClick={() => onArchive(task)}><Archive className="h-4 w-4" /></button>}
@@ -66,6 +68,12 @@ export function KanbanBoard({ zones, tasks: initial, archived }: { zones: Zone[]
     setTasks((all) => all.map((x) => (x.id === t.id ? { ...x, status, doneAt: status === 'done' ? new Date().toISOString() : null } : x)));
     try { await call(`/api/tasks/${t.id}`, 'PATCH', { status }); }
     catch (e) { setTasks((all) => all.map((x) => (x.id === t.id ? before : x))); setError(e instanceof Error ? e.message : 'Could not move it.'); }
+  }
+  async function rename(t: Task, title: string) {
+    const before = t.title;
+    setTasks((all) => all.map((x) => (x.id === t.id ? { ...x, title } : x)));
+    try { await call(`/api/tasks/${t.id}`, 'PATCH', { title }); }
+    catch (e) { setTasks((all) => all.map((x) => (x.id === t.id ? { ...x, title: before } : x))); throw e; }
   }
   async function archiveOne(t: Task) {
     setTasks((all) => all.filter((x) => x.id !== t.id));
@@ -113,8 +121,8 @@ export function KanbanBoard({ zones, tasks: initial, archived }: { zones: Zone[]
                 {c.status === 'done' && list.length > 0 && <button type="button" className="btn !px-2.5 !py-1 text-[12.5px]" onClick={archiveAllDone}><Archive className="h-3.5 w-3.5" />Archive all</button>}
               </header>
               <ul className="flex-1 space-y-2 p-3">
-                {list.length === 0 && <li className="px-1 py-3 text-faint">{c.status === 'done' ? 'Nothing finished yet.' : 'Nothing here.'}</li>}
-                {list.map((t) => <Card key={t.id} task={t} onMove={move} onArchive={archiveOne} onEdit={setEditing} />)}
+                {list.length === 0 && <li><Empty sprite={c.status === 'done' ? 'star' : 'sprout'}>{c.status === 'done' ? 'Nothing finished yet.' : c.status === 'doing' ? 'Nothing in progress. Pull a card here.' : 'Nothing planned.'}</Empty></li>}
+                {list.map((t) => <Card key={t.id} task={t} onMove={move} onArchive={archiveOne} onEdit={setEditing} onRename={rename} />)}
               </ul>
               {c.status === 'todo' && (
                 <form onSubmit={add} className="space-y-2 border-t border-line p-3">

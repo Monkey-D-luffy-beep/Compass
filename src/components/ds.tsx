@@ -82,14 +82,15 @@ export function ProgressRing({ value, size = 112, caption = 'Progress' }: { valu
 
 export function StatCard({ label, value, hint, tone }: { label: string; value: ReactNode; hint?: ReactNode; tone?: 'good' | 'bad' | 'warn' }) {
   const color = tone === 'bad' ? 'text-bad' : tone === 'good' ? 'text-good' : tone === 'warn' ? 'text-warn' : '';
-  return <div className="card card-pad"><p className="label">{label}</p><p className={`font-pixel mt-2 text-[28px] font-bold leading-none tabular-nums ${color}`}>{value}</p>{hint && <p className="mt-2 text-[12.5px] text-muted">{hint}</p>}</div>;
+  const bar = tone === 'bad' ? 'var(--bad)' : tone === 'good' ? 'var(--good)' : tone === 'warn' ? 'var(--warn)' : 'var(--accent)';
+  return <div className="card card-pad relative overflow-hidden"><span aria-hidden className="absolute inset-x-0 top-0 h-1.5" style={{ background: bar }} /><p className="label mt-1">{label}</p><p className={`font-pixel mt-2 text-[28px] font-bold leading-none tabular-nums ${color}`}>{value}</p>{hint && <p className="mt-2 text-[12.5px] text-muted">{hint}</p>}</div>;
 }
 
 /** A card with a pixel-font title and an optional action on the right. */
 export function Panel({ title, icon, action, children, className = '' }: { title: string; icon?: ReactNode; action?: ReactNode; children: ReactNode; className?: string }) {
   return (
     <section className={`card card-pad ${className}`} aria-label={title}>
-      <header className="mb-3 flex items-center justify-between gap-3"><h2 className="h-card flex items-center gap-2.5">{icon}{title}</h2>{action}</header>
+      <header className="mb-3 flex items-center justify-between gap-3"><h2 className="h-card flex items-center gap-2.5">{icon && <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md border-2 border-outline bg-accent/40">{icon}</span>}{title}</h2>{action}</header>
       {children}
     </section>
   );
@@ -136,37 +137,20 @@ export function MiniCalendar({ today, counts }: { today: string; counts: Record<
   );
 }
 
-/* --------------------------------------------------------------------------------------- the sunset scene */
-const px = (x: number, y: number, w: number, h: number, fill: string, key?: string) => <rect key={key ?? `${x}-${y}-${w}-${h}-${fill}`} x={x} y={y} width={w} height={h} fill={fill} />;
-function Pine({ x, y, h }: { x: number; y: number; h: number }) {
-  const rows = [];
-  for (let i = 0; i < h; i++) rows.push(px(x - Math.floor(i / 2) - 1, y + i, Math.floor(i / 2) * 2 + 3, 1, i % 2 ? '#1f4a3c' : '#2a5c48', `p${x}-${i}`));
-  rows.push(px(x, y + h, 1, 2, '#4a2f25', `t${x}`));
-  return <>{rows}</>;
-}
-function Sun({ cx, cy, r }: { cx: number; cy: number; r: number }) {
-  const out = [];
-  for (let dy = -r; dy <= 0; dy++) { const w = Math.floor(Math.sqrt(r * r - dy * dy)); out.push(px(cx - w, cy + dy, w * 2, 1, dy < -r + 2 ? '#fff3b8' : '#ffd96b', `s${dy}`)); }
-  return <>{out}</>;
-}
-/** A pixel-art campsite at sunset, drawn from rectangles so it stays crisp at any size. Purely decorative. */
-export function PixelScene({ className = '' }: { className?: string }) {
+/* ------------------------------------------------------------------------------------------ empty states */
+const SPRITES_EMPTY: Record<'sprout' | 'star', { rows: string[]; colors: Record<string, string> }> = {
+  sprout: { rows: ['..LL..LL..', '.LLLL.LLL.', '.LLLL.LLL.', '..LL.LL...', '...LLL....', '....S.....', '....S.....', '..DDDDDD..', '.DDDDDDDD.'], colors: { L: '#4fbf6b', S: '#2e8f55', D: '#8a5a2b' } },
+  star: { rows: ['....Y....', '....Y....', '...YYY...', 'YYYYYYYYY', '.YYYYYYY.', '..YYYYY..', '.YYY.YYY.', '.YY...YY.'], colors: { Y: '#f6c12e' } },
+};
+/** A small pixel sprite and a line of text, for a list or column with nothing in it yet. */
+export function Empty({ children, sprite = 'sprout' }: { children: ReactNode; sprite?: 'sprout' | 'star' }) {
+  const d = SPRITES_EMPTY[sprite]; const w = d.rows[0].length;
   return (
-    <svg viewBox="0 0 160 40" preserveAspectRatio="xMidYMid slice" shapeRendering="crispEdges" aria-hidden className={className}>
-      {px(0, 0, 160, 8, 'var(--sky-a)')}{px(0, 8, 160, 6, '#74467f')}{px(0, 14, 160, 6, 'var(--sky-b)')}{px(0, 20, 160, 6, 'var(--sky-c)')}{px(0, 26, 160, 14, 'var(--sky-d)')}
-      <Sun cx={97} cy={30} r={7} />
-      {[[18, 5, 12], [30, 7, 8], [64, 3, 14], [116, 8, 10]].map(([x, y, w]) => <g key={x}>{px(x, y, w, 1, '#f2a3a0', `c1${x}`)}{px(x + 2, y + 1, w - 3, 1, '#d97f8a', `c2${x}`)}</g>)}
-      <polygon points="0,32 9,25 15,28 26,21 38,29 50,24 60,30 78,23 95,31 112,24 126,30 142,22 160,28 160,40 0,40" fill="#5b4a8c" />
-      <polygon points="0,36 12,30 22,34 36,28 52,35 70,30 88,36 108,31 124,36 146,30 160,34 160,40 0,40" fill="#3b3566" />
-      <rect x="0" y="35" width="160" height="5" fill="#1d3a36" />
-      {[[4, 28, 6], [11, 30, 5], [19, 27, 7], [27, 30, 5], [36, 29, 6], [44, 31, 4], [53, 29, 6], [62, 31, 4], [70, 28, 7], [78, 30, 5]].map(([x, y, h]) => <Pine key={x} x={x} y={y} h={h} />)}
-      {/* rock, camper and cat */}
-      {px(112, 33, 24, 7, '#6b5566')}{px(114, 31, 18, 2, '#7d6676')}{px(118, 30, 10, 1, '#7d6676')}
-      {px(122, 24, 5, 6, '#f6c12e')}{px(123, 22, 3, 2, '#e8b890')}{px(122, 21, 5, 1, '#4a3022')}{px(127, 25, 2, 4, '#3b3566')}{px(120, 29, 8, 1, '#c28a1d')}
-      {px(129, 28, 5, 2, '#f5f1e8')}{px(133, 26, 2, 3, '#f5f1e8')}{px(133, 25, 1, 1, '#f5f1e8')}{px(135, 25, 1, 1, '#f5f1e8')}
-      {/* tent and lantern */}
-      <polygon points="139,40 150,20 161,40" fill="#f2b630" /><polygon points="150,20 161,40 150,40" fill="#c98712" /><polygon points="146,40 150,30 154,40" fill="#6a3d14" />
-      {px(136, 34, 2, 3, '#fff2a8')}{px(136, 33, 2, 1, '#8a5d00')}{px(135, 33, 4, 5, 'rgba(255, 220, 120, .28)')}
-    </svg>
+    <div className="flex flex-col items-center gap-2 px-3 py-5 text-center text-muted">
+      <svg width={w * 4} height={d.rows.length * 4} viewBox={`0 0 ${w} ${d.rows.length}`} shapeRendering="crispEdges" aria-hidden>
+        {d.rows.flatMap((row, y) => [...row].map((c, x) => (c === '.' ? null : <rect key={`${x}-${y}`} x={x} y={y} width={1} height={1} fill={d.colors[c]} />)))}
+      </svg>
+      <p>{children}</p>
+    </div>
   );
 }

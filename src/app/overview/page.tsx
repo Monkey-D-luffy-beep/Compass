@@ -44,7 +44,7 @@ export default async function Overview() {
         <p className="label mb-2">Projects</p>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {o.zones.map((s) => (
-            <Link key={s.zone.id} href={`/zones/${s.zone.id}`} className="card card-pad block transition hover:bg-surface2">
+            <Link key={s.zone.id} href={`/zones/${s.zone.id}`} className="card card-pad card-hover block">
               <div className="flex items-center justify-between gap-3">
                 <p className="flex items-center gap-2 font-medium"><span className="dot" style={{ background: s.zone.color }} />{s.zone.name}</p>
                 <span className="text-[12.5px] text-muted">{s.open} open{s.overdue ? <span className="text-bad"> · {s.overdue} late</span> : ''}</span>

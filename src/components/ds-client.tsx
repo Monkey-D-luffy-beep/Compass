@@ -146,3 +146,28 @@ export function CaptureBar({ zones }: { zones: { id: string; name: string }[] })
     </form>
   );
 }
+
+/* ------------------------------------------------------------------------------------------ inline title */
+/** A task title you edit where it stands: click, type, Enter to save, Escape to cancel. Leaving the field also saves. */
+export function InlineTitle({ value, done = false, onSave, onEditing }: { value: string; done?: boolean; onSave: (next: string) => Promise<void>; onEditing?: (editing: boolean) => void }) {
+  const toast = useToast();
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(value);
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => { if (!editing) setText(value); }, [value, editing]);
+  const fit = () => { const el = ref.current; if (el) { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; } };
+  useEffect(() => { if (editing) { const el = ref.current; el?.focus(); el?.select(); fit(); } }, [editing]);
+  const set = (v: boolean) => { setEditing(v); onEditing?.(v); };
+
+  async function commit() {
+    const v = text.trim(); set(false);
+    if (!v || v === value) { setText(value); return; }
+    try { await onSave(v); } catch (e) { setText(value); toast(e instanceof Error ? e.message : 'Could not save the title.', 'error'); }
+  }
+  if (editing) {
+    return <textarea ref={ref} rows={1} value={text} maxLength={300} aria-label="Task title" className="input !px-2 !py-1 !text-[16px] leading-snug sm:!text-[14.5px]" style={{ resize: 'none', overflow: 'hidden' }}
+      onChange={(e) => { setText(e.target.value); fit(); }} onBlur={commit}
+      onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.currentTarget.blur(); } if (e.key === 'Escape') { setText(value); set(false); } }} />;
+  }
+  return <button type="button" className="w-full cursor-text text-left leading-snug" title="Click to edit" aria-label={`Edit title: ${value}`} onClick={() => set(true)}><span className="strike" data-done={done}>{value}</span></button>;
+}

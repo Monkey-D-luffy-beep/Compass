@@ -1,6 +1,5 @@
 "use client";
 import { useState } from 'react';
-import { PixelScene } from '@/components/ds';
 
 export default function Login() {
   const [password, setPassword] = useState(''); const [error, setError] = useState<string | null>(null); const [busy, setBusy] = useState(false);
@@ -15,8 +14,9 @@ export default function Login() {
   }
   return (
     <div className="fixed inset-0 z-50 grid place-items-center overflow-auto bg-navy px-5 py-8">
-      <PixelScene className="absolute inset-0 h-full w-full" />
-      <form onSubmit={go} className="card card-pad relative w-full max-w-sm space-y-4">
+      <form onSubmit={go} className="card card-pad relative w-full max-w-md space-y-4">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/banner-hero.png" alt="" className="-mx-1 -mt-1 block h-auto w-[calc(100%+8px)] rounded-md border-2 border-outline" />
         {/* The wordmark is dark, so it always sits on its own cream plate, in either theme. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <div className="rounded-md bg-[#fbf4e4] px-3 py-2"><img src="/logo-full.png" alt="Compass: plan, focus, build, grow" className="mx-auto h-auto w-full max-w-[260px]" style={{ imageRendering: 'pixelated' }} /></div>

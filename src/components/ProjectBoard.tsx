@@ -1,18 +1,18 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Archive, Check, MoreHorizontal, Plus, RotateCcw } from 'lucide-react';
+import { Archive, Check, MoreHorizontal, Plus, RotateCcw, SlidersHorizontal } from 'lucide-react';
 import { call } from '@/lib/client';
 import { dayLabel } from '@/lib/dates';
 import type { Task, Zone } from '@/lib/store';
 import { TaskEditor } from './TaskEditor';
-import { useToast } from './ds-client';
+import { InlineTitle, useToast } from './ds-client';
 
 const COLORS = ['#7aa2ff', '#4ade80', '#f5a524', '#b794f6', '#4fd1c5', '#f87171', '#f472b6', '#a3e635'];
 const ORDER = { doing: 0, todo: 1, done: 2 } as const;
 
 /** One task line: tick it (the line draws across), start it, open it to edit, archive it once done. */
-function TaskLine({ task, onChange, onArchive, onEdit }: { task: Task; onChange: (t: Task) => void; onArchive: (t: Task) => void; onEdit: (t: Task) => void }) {
+function TaskLine({ task, onChange, onArchive, onEdit, onRename }: { task: Task; onChange: (t: Task) => void; onArchive: (t: Task) => void; onEdit: (t: Task) => void; onRename: (t: Task, title: string) => Promise<void> }) {
   const done = task.status === 'done';
   const [error, setError] = useState<string | null>(null);
 
@@ -29,9 +29,7 @@ function TaskLine({ task, onChange, onArchive, onEdit }: { task: Task; onChange:
         {done && <Check className="h-3 w-3" strokeWidth={3} />}
       </button>
       <div className="min-w-0 flex-1">
-        <button type="button" className="w-full text-left leading-snug" onClick={() => onEdit(task)} aria-label={`Edit: ${task.title}`}>
-          <span className="strike" data-done={done}>{task.title}</span>
-        </button>
+        <InlineTitle value={task.title} done={done} onSave={(v) => onRename(task, v)} />
         {(task.dueOn || task.notes) && <p className="mt-0.5 truncate text-[12.5px] text-faint">{task.dueOn ? dayLabel(task.dueOn) : ''}{task.dueOn && task.notes ? ' · ' : ''}{task.notes ?? ''}</p>}
         {error && <p role="alert" className="text-[12.5px] text-bad">{error}</p>}
       </div>
@@ -40,6 +38,7 @@ function TaskLine({ task, onChange, onArchive, onEdit }: { task: Task; onChange:
           className={`pill shrink-0 cursor-pointer !py-0 ${task.status === 'doing' ? '!border-transparent !bg-accent/20 !text-accent' : 'opacity-0 group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-100'}`}
           aria-label={task.status === 'doing' ? 'Move back to planned' : 'Start this task'}>{task.status === 'doing' ? 'In progress' : 'Planned'}</button>
       )}
+      <button type="button" className="tip shrink-0 rounded-md p-1 text-faint opacity-0 hover:text-ink group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-100" data-tip="Details" aria-label="Open task details" onClick={() => onEdit(task)}><SlidersHorizontal className="h-4 w-4" /></button>
       {done && <button type="button" className="shrink-0 rounded-md p-1 text-faint hover:text-ink" aria-label="Archive this task" title="Archive" onClick={() => onArchive(task)}><Archive className="h-4 w-4" /></button>}
     </li>
   );
@@ -68,6 +67,12 @@ function Block({ zone, initial }: { zone: Zone; initial: Task[] }) {
     try { const t = await call<Task>('/api/tasks', 'POST', { title: text, zone: zone.id }); setTasks((all) => [...all, t]); setTitle(''); inputRef.current?.focus(); }
     catch (err) { setError(err instanceof Error ? err.message : 'Could not add it.'); }
     finally { setAdding(false); }
+  }
+  async function rename(t: Task, title: string) {
+    const before = t.title;
+    setTasks((all) => all.map((x) => (x.id === t.id ? { ...x, title } : x)));
+    try { await call(`/api/tasks/${t.id}`, 'PATCH', { title }); }
+    catch (e) { setTasks((all) => all.map((x) => (x.id === t.id ? { ...x, title: before } : x))); throw e; }
   }
   async function archiveOne(t: Task) {
     setTasks((all) => all.filter((x) => x.id !== t.id));
@@ -117,7 +122,7 @@ function Block({ zone, initial }: { zone: Zone; initial: Task[] }) {
 
       {tasks.length > 0 && <div className="mx-4 mt-3 h-1 overflow-hidden rounded-full bg-line"><div className="h-full rounded-full transition-all duration-500" style={{ width: `${(done / tasks.length) * 100}%`, background: zone.color }} /></div>}
 
-      <ul className="mt-2 flex-1 space-y-0.5 px-2">{sorted.map((t) => <TaskLine key={t.id} task={t} onChange={replace} onArchive={archiveOne} onEdit={setEditing} />)}</ul>
+      <ul className="mt-2 flex-1 space-y-0.5 px-2">{sorted.map((t) => <TaskLine key={t.id} task={t} onChange={replace} onArchive={archiveOne} onEdit={setEditing} onRename={rename} />)}</ul>
 
       <form onSubmit={add} className="flex items-center gap-2 border-t border-line px-3 py-2.5">
         <Plus className="h-4 w-4 shrink-0 text-faint" aria-hidden />

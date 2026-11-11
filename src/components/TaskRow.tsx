@@ -1,12 +1,13 @@
 "use client";
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, Clock, Trash2 } from 'lucide-react';
+import { Check, Clock, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { call } from '@/lib/client';
 import { BUCKET_LABEL, bucketOf, dayLabel, type Bucket, type When } from '@/lib/dates';
 import type { Task } from '@/lib/store';
 import { TaskEditor } from './TaskEditor';
 import { PriorityDot, StatusBadge } from './ds';
+import { InlineTitle } from './ds-client';
 
 const MOVES: { when: When; label: string }[] = [
   { when: 'today', label: 'Today' }, { when: 'week', label: 'This week' }, { when: 'next', label: 'Next week' }, { when: 'month', label: 'This month' }, { when: 'later', label: 'Later' },
@@ -32,9 +33,8 @@ export function TaskRow({ task, today, showZone = true }: { task: Task; today: s
         onClick={() => { setDone(!done); run(() => call(`/api/tasks/${task.id}`, 'PATCH', { status: done ? 'todo' : 'done' })); }}>
         {done && <Check className="h-3 w-3" strokeWidth={3} />}
       </button>
-      <div className="min-w-0 flex-1 cursor-pointer" role="button" tabIndex={0} aria-label={`Edit: ${task.title}`}
-        onClick={() => setEditing(true)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditing(true); } }}>
-        <p className={`leading-snug ${done ? 'text-faint line-through' : ''}`}>{task.title}</p>
+      <div className="min-w-0 flex-1">
+        <InlineTitle value={task.title} done={done} onSave={async (title) => { await call(`/api/tasks/${task.id}`, 'PATCH', { title }); router.refresh(); }} />
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-muted">
           {showZone && <span className="inline-flex items-center gap-1.5"><span className="dot" style={{ background: task.zoneColor }} />{task.zoneName}</span>}
           {task.dueOn && <span className={bucket === 'overdue' ? 'text-bad' : ''}>{bucket === 'overdue' ? 'Overdue · ' : ''}{dayLabel(task.dueOn)}</span>}
@@ -51,6 +51,7 @@ export function TaskRow({ task, today, showZone = true }: { task: Task; today: s
           <option value="">Move…</option>
           {MOVES.map((m) => <option key={m.when} value={m.when}>{m.label}</option>)}
         </select>
+        <button type="button" className="tip rounded-lg p-1.5 text-faint hover:bg-bg hover:text-ink" data-tip="Details" aria-label="Open task details" onClick={() => setEditing(true)}><SlidersHorizontal className="h-4 w-4" /></button>
         <button type="button" className="rounded-lg p-1.5 text-faint hover:bg-bg hover:text-bad" aria-label="Delete task" onClick={() => run(() => call(`/api/tasks/${task.id}`, 'DELETE'))}><Trash2 className="h-4 w-4" /></button>
       </div>
       {editing && <TaskEditor task={task} onClose={() => setEditing(false)} onSaved={() => router.refresh()} />}

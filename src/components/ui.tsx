@@ -4,7 +4,7 @@ export function PageHead({ title, sub, right }: { title: string; sub?: string; r
   return (
     <header className="mb-7 flex flex-wrap items-end justify-between gap-4">
       <div>
-        <h1 className="h-page">{title}</h1>
+        <h1 className="h-page flex items-center gap-3"><span aria-hidden className="inline-block h-7 w-2.5 border-2 border-outline bg-accent" />{title}</h1>
         {sub && <p className="mt-1 max-w-2xl text-muted">{sub}</p>}
       </div>
       {right}
