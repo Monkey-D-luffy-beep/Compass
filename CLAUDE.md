@@ -27,6 +27,11 @@ Add the Anthropic API key on the Settings page (stored encrypted) or set `ANTHRO
 - "Get new ideas" (Ideas page) asks Claude for 5 unproven ideas with the cheapest test each; nothing is saved until you press Keep.
 - Deploy: `vercel --prod` from this folder with `DATABASE_URL`, `COMPASS_PASSWORD`, `COMPASS_KEY` set (and `regions` near the database).
 
+## Business numbers (Pulse, Overview)
+- `lib/pulse.ts` reads two sources, read-only: **Dodo** (`DODO_API_KEY` read-only key, `DODO_ENV` live/test; payments list plus one detail call per payment for the settled amount, cached per payment) and the **Nexora backend** (`NEXORA_PULSE_URL`, `NEXORA_PULSE_TOKEN`, must equal `PULSE_TOKEN` on the backend; route in `ig_exporter/backend/src/app/api/pulse`). Either can be missing or down; the other still shows and the assistant is told not to invent the missing figures.
+- Revenue = **settled amount net of tax** (`settlement_amount - settlement_tax`), never the customer-currency totals. "New customer" = first payment inside 28 days of history. Cached 10 min per server instance (1 min after a failure); the browser also keeps the last copy so the page shows at once.
+- `/overview` is built by the pure `lib/overview.ts` (tested). `app/loading.tsx` is the instant skeleton.
+
 ## Rules that matter
 - **The assistant never changes data.** Suggested tasks arrive as a fenced ```tasks block that is parsed and shown as buttons; nothing is
   added until the person presses one. Unknown zones in a suggestion are dropped.
