@@ -1,14 +1,14 @@
 import Link from 'next/link';
 import { Flame } from 'lucide-react';
 import { hasKey } from '@/lib/ai';
-import { bucketOf, dayLabel, hourNow, monthLabel, todayStr, weekEnd } from '@/lib/dates';
+import { bucketOf, dayLabel, hourNow, todayStr, weekEnd } from '@/lib/dates';
 import { getDb } from '@/lib/runtime';
-import { focusList, listRevenue, listRoutines, listTasks, listZones, monthTotals, revenueGoal, runsOn, streak } from '@/lib/store';
+import { focusList, listRoutines, listTasks, listZones, runsOn, streak } from '@/lib/store';
 import { FocusAdvisor } from '@/components/FocusAdvisor';
 import { QuickAdd } from '@/components/QuickAdd';
 import { RoutineList } from '@/components/RoutineList';
 import { TaskRow } from '@/components/TaskRow';
-import { Bar, Money, Spark, fmtUsd } from '@/components/ui';
+import { Money } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Today' };
@@ -16,14 +16,12 @@ export const metadata = { title: 'Today' };
 export default async function Today() {
   const db = await getDb();
   const today = todayStr();
-  const [zones, open, revRows, goal, routineRows, days, keyed] = await Promise.all([
-    listZones(db), listTasks(db, { status: 'open' }), listRevenue(db), revenueGoal(db), listRoutines(db, today), streak(db, today), hasKey(db),
+  const [zones, open, routineRows, days, keyed] = await Promise.all([
+    listZones(db), listTasks(db, { status: 'open' }), listRoutines(db, today), streak(db, today), hasKey(db),
   ]);
   const focus = focusList(open, today, 3);
   const dueNow = open.filter((t) => ['overdue', 'today'].includes(bucketOf(t.dueOn, today)));
   const weekTasks = open.filter((t) => bucketOf(t.dueOn, today) === 'week');
-  const totals = monthTotals(revRows);
-  const latest = totals[totals.length - 1];
   const routine = routineRows.map((r) => ({ ...r, runsToday: runsOn(r.days, today) })).filter((r) => r.runsToday);
   const doneCount = routine.filter((r) => r.doneToday).length;
   const hour = hourNow();
@@ -39,20 +37,7 @@ export default async function Today() {
         {days > 0 && <span className="pill !px-3 !py-1.5 text-warn"><Flame className="h-4 w-4" />{days}-day routine streak</span>}
       </header>
 
-      <div className="grid gap-5 lg:grid-cols-[1fr_1.35fr]">
-        <section className="card card-pad" aria-label="Money">
-          <div className="flex items-start justify-between">
-            <p className="label">Monthly revenue</p>
-            <Link href="/money" className="text-[13px] text-muted hover:text-ink">Log numbers</Link>
-          </div>
-          <p className="mt-2 text-[34px] font-semibold leading-none tabular-nums">{fmtUsd(latest?.total ?? 0)}<span className="ml-2 text-[15px] font-normal text-muted">of {fmtUsd(goal)}</span></p>
-          <div className="mt-4"><Bar value={latest?.total ?? 0} max={goal} /></div>
-          <div className="mt-3 flex items-end justify-between">
-            <p className="text-muted">{latest ? `${monthLabel(latest.month)}. ` : ''}{(latest?.total ?? 0) >= goal ? 'Goal reached.' : `${fmtUsd(goal - (latest?.total ?? 0))} to go.`}</p>
-            <Spark values={totals.slice(-6).map((t) => t.total)} />
-          </div>
-        </section>
-
+      <div className="grid gap-5">
         <section className="card card-pad" aria-label="Focus">
           <p className="label">Do these first</p>
           {focus.length === 0 ? <p className="mt-3 text-muted">Nothing open. Add a task below.</p> : (
