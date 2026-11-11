@@ -40,20 +40,23 @@ export const KINDS = ['build', 'growth', 'maintenance', 'study', 'admin'] as con
 export type Kind = (typeof KINDS)[number];
 export interface Task {
   id: string; zoneId: string; zoneName: string; zoneColor: string; title: string; notes: string | null;
-  status: 'todo' | 'doing' | 'done'; dueOn: string | null; priority: number; money: number; kind: Kind; effort: number | null; createdAt: string; doneAt: string | null;
+  status: 'todo' | 'doing' | 'done'; dueOn: string | null; priority: number; money: number; kind: Kind; effort: number | null; createdAt: string; doneAt: string | null; archivedAt: string | null;
 }
 const toTask = (r: Row): Task => ({
   id: r.id as string, zoneId: r.zone_id as string, zoneName: r.zone_name as string, zoneColor: r.zone_color as string, title: r.title as string, notes: (r.notes as string) ?? null,
   status: r.status as Task['status'], dueOn: (r.due_on as string) ?? null, priority: r.priority as number, money: r.money as number, kind: r.kind as Kind, effort: (r.effort as number) ?? null,
-  createdAt: r.created_at as string, doneAt: (r.done_at as string) ?? null,
+  createdAt: r.created_at as string, doneAt: (r.done_at as string) ?? null, archivedAt: (r.archived_at as string) ?? null,
 });
 const TASK_SQL = 'select t.*, z.name as zone_name, z.color as zone_color from tasks t join zones z on z.id = t.zone_id';
 
-export async function listTasks(db: Db, o: { zoneId?: string; status?: 'open' | 'done' } = {}): Promise<Task[]> {
+/** archived: undefined = everything, false = hide archived, true = only archived. */
+export async function listTasks(db: Db, o: { zoneId?: string; status?: 'open' | 'done'; archived?: boolean } = {}): Promise<Task[]> {
   const w: string[] = []; const a: unknown[] = [];
   if (o.zoneId) { w.push('t.zone_id = ?'); a.push(o.zoneId); }
   if (o.status === 'open') w.push("t.status != 'done'");
   if (o.status === 'done') w.push("t.status = 'done'");
+  if (o.archived === false) w.push('t.archived_at is null');
+  if (o.archived === true) w.push('t.archived_at is not null');
   const order = o.status === 'done' ? 't.done_at desc' : "coalesce(t.due_on, '9999-99-99'), t.priority, t.money desc, t.created_at";
   return (await db.query(`${TASK_SQL} ${w.length ? 'where ' + w.join(' and ') : ''} order by ${order}`, a)).map(toTask);
 }
@@ -73,7 +76,7 @@ export async function addTask(db: Db, i: NewTask, today = todayStr()): Promise<T
       (KINDS as readonly string[]).includes(i.kind ?? '') ? (i.kind as string) : 'build', i.effort ? clamp(i.effort, 1, 1440, 30) : null, now()]);
   return (await getTask(db, tid))!;
 }
-export interface TaskPatch { title?: string; notes?: string | null; status?: Task['status']; when?: When; dueOn?: string | null; money?: number; kind?: Kind; priority?: number; effort?: number | null; zone?: string }
+export interface TaskPatch { title?: string; notes?: string | null; status?: Task['status']; archived?: boolean; when?: When; dueOn?: string | null; money?: number; kind?: Kind; priority?: number; effort?: number | null; zone?: string }
 export async function updateTask(db: Db, id: string, p: TaskPatch, today = todayStr()): Promise<Task> {
   const t = await getTask(db, id); if (!t) throw new InputError('That task does not exist.');
   const zone = p.zone ? await zoneByNameOrId(db, p.zone) : null; if (p.zone && !zone) throw new InputError('That zone does not exist.');
@@ -81,12 +84,19 @@ export async function updateTask(db: Db, id: string, p: TaskPatch, today = today
   if (p.title !== undefined && !p.title.trim()) throw new InputError('A task needs a title.');
   const status = p.status && ['todo', 'doing', 'done'].includes(p.status) ? p.status : t.status;
   const due = p.dueOn !== undefined ? p.dueOn || null : p.when ? dueFor(p.when, today) : t.dueOn;
-  await db.run('update tasks set zone_id = ?, title = ?, notes = ?, status = ?, due_on = ?, priority = ?, money = ?, kind = ?, effort = ?, done_at = ? where id = ?', [
+  await db.run('update tasks set zone_id = ?, title = ?, notes = ?, status = ?, due_on = ?, priority = ?, money = ?, kind = ?, effort = ?, done_at = ?, archived_at = ? where id = ?', [
     zone?.id ?? t.zoneId, (p.title ?? t.title).trim().slice(0, 300), p.notes === undefined ? t.notes : p.notes?.trim() || null, status, due,
     p.priority === undefined ? t.priority : clamp(p.priority, 1, 3, 2), p.money === undefined ? t.money : clamp(p.money, 0, 3, 0),
     p.kind && (KINDS as readonly string[]).includes(p.kind) ? p.kind : t.kind, p.effort === undefined ? t.effort : p.effort ? clamp(p.effort, 1, 1440, 30) : null,
-    status === 'done' ? (t.doneAt ?? now()) : null, id]);
+    status === 'done' ? (t.doneAt ?? now()) : null,
+    p.archived === undefined ? t.archivedAt : p.archived ? (t.archivedAt ?? now()) : null, id]);
   return (await getTask(db, id))!;
+}
+/** Tuck every finished task of a project (or of all projects) away. Returns how many. */
+export async function archiveDone(db: Db, zoneId?: string): Promise<number> {
+  const rows = await db.query(`select id from tasks where status = 'done' and archived_at is null${zoneId ? ' and zone_id = ?' : ''}`, zoneId ? [zoneId] : []);
+  if (rows.length) await db.run(`update tasks set archived_at = ? where status = 'done' and archived_at is null${zoneId ? ' and zone_id = ?' : ''}`, zoneId ? [now(), zoneId] : [now()]);
+  return rows.length;
 }
 export const deleteTask = async (db: Db, id: string) => { await db.run('delete from tasks where id = ?', [id]); };
 
@@ -138,16 +148,17 @@ export function monthTotals(rows: RevenueRow[]): { month: string; total: number 
 }
 
 /* ----------------------------------------------------------------------------------------------- ideas */
-export const IDEA_KINDS = ['extension', 'lever', 'content', 'other'] as const;
+/** Suggested kinds. A person can also type their own (a game, a newsletter...), so the stored kind is any short text. */
+export const IDEA_KINDS = ['extension', 'saas', 'game', 'content', 'lever', 'other'] as const;
 export const IDEA_STATUS = ['new', 'validating', 'building', 'parked', 'dropped'] as const;
-export interface Idea { id: string; title: string; kind: (typeof IDEA_KINDS)[number]; pitch: string | null; moneyLogic: string | null; validateStep: string | null; status: (typeof IDEA_STATUS)[number]; score: number }
-const toIdea = (r: Row): Idea => ({ id: r.id as string, title: r.title as string, kind: r.kind as Idea['kind'], pitch: (r.pitch as string) ?? null, moneyLogic: (r.money_logic as string) ?? null, validateStep: (r.validate_step as string) ?? null, status: r.status as Idea['status'], score: r.score as number });
+export interface Idea { id: string; title: string; kind: string; pitch: string | null; moneyLogic: string | null; validateStep: string | null; status: (typeof IDEA_STATUS)[number]; score: number }
+const toIdea = (r: Row): Idea => ({ id: r.id as string, title: r.title as string, kind: r.kind as string, pitch: (r.pitch as string) ?? null, moneyLogic: (r.money_logic as string) ?? null, validateStep: (r.validate_step as string) ?? null, status: r.status as Idea['status'], score: r.score as number });
 export const listIdeas = async (db: Db): Promise<Idea[]> => (await db.query("select * from ideas order by case status when 'dropped' then 2 when 'parked' then 1 else 0 end, score desc, created_at desc")).map(toIdea);
 export async function addIdea(db: Db, i: { title: string; kind?: string; pitch?: string; moneyLogic?: string; validateStep?: string; score?: number }): Promise<Idea> {
   const title = i.title?.trim(); if (!title) throw new InputError('Name the idea.');
   const iid = randomUUID();
   await db.run('insert into ideas (id, title, kind, pitch, money_logic, validate_step, score, created_at) values (?,?,?,?,?,?,?,?)',
-    [iid, title.slice(0, 120), (IDEA_KINDS as readonly string[]).includes(i.kind ?? '') ? (i.kind as string) : 'extension', i.pitch?.trim() || null, i.moneyLogic?.trim() || null, i.validateStep?.trim() || null, clamp(i.score, 1, 5, 3), now()]);
+    [iid, title.slice(0, 120), (i.kind ?? '').trim().slice(0, 24).toLowerCase() || 'extension', i.pitch?.trim() || null, i.moneyLogic?.trim() || null, i.validateStep?.trim() || null, clamp(i.score, 1, 5, 3), now()]);
   return toIdea((await one(db, 'select * from ideas where id = ?', [iid]))!);
 }
 export async function updateIdea(db: Db, id: string, p: { status?: string; score?: number; title?: string; pitch?: string | null }): Promise<Idea> {
@@ -202,3 +213,22 @@ export const setSetting = async (db: Db, key: string, value: string) => { await 
 export const deleteSetting = async (db: Db, key: string) => { await db.run('delete from settings where key = ?', [key]); };
 export const revenueGoal = async (db: Db): Promise<number> => Number(await getSetting(db, 'revenue_goal')) || 1000;
 export { monthOf };
+
+
+/* -------------------------------------------------------------------------------------------- income & expenses */
+export interface Entry { id: string; type: 'income' | 'expense'; category: string; amount: number; currency: 'USD' | 'INR'; onDate: string; note: string | null }
+const toEntry = (r: Row): Entry => ({ id: r.id as string, type: r.type as Entry['type'], category: r.category as string, amount: Number(r.amount), currency: r.currency as Entry['currency'], onDate: r.on_date as string, note: (r.note as string) ?? null });
+export const listEntries = async (db: Db): Promise<Entry[]> => (await db.query('select * from entries order by on_date desc, created_at desc')).map(toEntry);
+export async function addEntry(db: Db, i: { type: string; category: string; amount: number; currency?: string; onDate: string; note?: string }): Promise<Entry> {
+  if (i.type !== 'income' && i.type !== 'expense') throw new InputError('Choose income or expense.');
+  const category = i.category?.trim().slice(0, 40); if (!category) throw new InputError('Add a category, like Salary or Hosting.');
+  const amount = Number(i.amount); if (!Number.isFinite(amount) || amount <= 0 || amount > 1e9) throw new InputError('The amount must be a number above zero.');
+  const currency = i.currency === 'INR' ? 'INR' : 'USD';
+  if (!validDate(i.onDate)) throw new InputError('Pick a valid date.');
+  const id = randomUUID();
+  await db.run('insert into entries (id, type, category, amount, currency, on_date, note, created_at) values (?,?,?,?,?,?,?,?)', [id, i.type, category, Math.round(amount * 100) / 100, currency, i.onDate, i.note?.trim().slice(0, 200) || null, now()]);
+  return toEntry((await one(db, 'select * from entries where id = ?', [id]))!);
+}
+export const deleteEntry = async (db: Db, id: string) => { await db.run('delete from entries where id = ?', [id]); };
+/** INR per 1 USD, set by the person. 88 until they change it; a guess, not a live rate. */
+export const inrPerUsd = async (db: Db): Promise<number> => Number(await getSetting(db, 'inr_per_usd')) || 88;

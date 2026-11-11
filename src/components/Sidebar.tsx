@@ -2,17 +2,17 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Activity, LayoutDashboard, LogOut, BookOpen, CalendarRange, Compass, Layers, Lightbulb, MessageSquare, Repeat, Settings, Sun, Wallet } from 'lucide-react';
+import { Activity, FolderKanban, LayoutDashboard, LogOut, BookOpen, CalendarRange, Compass, Layers, Lightbulb, MessageSquare, Settings, Sun, Wallet } from 'lucide-react';
 
 const NAV = [
+  { href: '/projects', label: 'Projects', icon: FolderKanban },
   { href: '/overview', label: 'Overview', icon: LayoutDashboard },
   { href: '/', label: 'Today', icon: Sun },
   { href: '/plan', label: 'Plan', icon: CalendarRange },
   { href: '/zones', label: 'Zones', icon: Layers },
-  { href: '/money', label: 'Money', icon: Wallet },
+  { href: '/money', label: 'Finance', icon: Wallet },
   { href: '/pulse', label: 'Pulse', icon: Activity },
   { href: '/ideas', label: 'Ideas', icon: Lightbulb },
-  { href: '/routine', label: 'Routine', icon: Repeat },
   { href: '/assistant', label: 'Assistant', icon: MessageSquare },
   { href: '/brain', label: 'Brain', icon: BookOpen },
   { href: '/settings', label: 'Settings', icon: Settings },

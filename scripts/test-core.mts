@@ -229,6 +229,48 @@ yes('pulse text carries the real numbers', /Active subscriptions/.test(txt) && /
 const txt2 = pulse.pulseText({ generatedAt: 'x', dodo: { state: 'not-set-up', why: 'no key' }, nexora: { state: 'error', why: 'down' } });
 yes('missing sources tell the assistant not to invent numbers', /Do not state any revenue/.test(txt2) && /Do not state any signup/.test(txt2));
 
+console.log('archive');
+const adb = await openMemory();
+const az = await store.addZone(adb, { name: 'Arch Test', kind: 'project' });
+const a1 = await store.addTask(adb, { title: 'one', zone: az.id }); const a2 = await store.addTask(adb, { title: 'two', zone: az.id }); await store.addTask(adb, { title: 'three', zone: az.id });
+await store.updateTask(adb, a1.id, { status: 'done' }); await store.updateTask(adb, a2.id, { status: 'done' });
+eq('archive-done only touches finished tasks of that project', [await store.archiveDone(adb, az.id), (await store.listTasks(adb, { zoneId: az.id, archived: false })).map((t) => t.title)], [2, ['three']]);
+eq('archived tasks are listed on their own and keep their done state', (await store.listTasks(adb, { zoneId: az.id, archived: true })).map((t) => [t.title, t.status]).sort(), [['one', 'done'], ['two', 'done']]);
+await store.updateTask(adb, a1.id, { archived: false });
+eq('a task can be restored', (await store.listTasks(adb, { zoneId: az.id, archived: false })).map((t) => t.title).sort(), ['one', 'three']);
+eq('archiving twice does nothing new', await store.archiveDone(adb, az.id), 1);
+eq('a renamed project keeps its tasks', [(await store.updateZone(adb, az.id, { name: 'Renamed' })).name, (await store.listTasks(adb, { zoneId: az.id })).length], ['Renamed', 3]);
+
+console.log('finance and ideas');
+const fin = await import('../src/lib/finance');
+const fdb = await openMemory();
+await store.addEntry(fdb, { type: 'income', category: 'Salary', amount: 88000, currency: 'INR', onDate: '2026-11-01' });
+await store.addEntry(fdb, { type: 'expense', category: 'Hosting', amount: 880, currency: 'INR', onDate: '2026-11-03' });
+await store.addEntry(fdb, { type: 'expense', category: 'Ads', amount: 20, currency: 'USD', onDate: '2026-11-05' });
+await store.addEntry(fdb, { type: 'expense', category: 'Domain', amount: 12, currency: 'USD', onDate: '2026-10-09' });
+const fe = await store.listEntries(fdb);
+const fr = fin.monthlyFinance([
+  { id: 'p1', date: '2026-11-04', amount: 22501, fee: 500, currency: 'USD', status: 'success' },
+  { id: 'p2', date: '2026-10-19', amount: 11115, fee: 500, currency: 'USD', status: 'success' },
+  { id: 'p3', date: '2026-10-20', amount: 99999, fee: 500, currency: 'USD', status: 'failed' },
+  { id: 'p4', date: '2026-10-21', amount: 5000, fee: 100, currency: 'EUR', status: 'success' },
+], fe, 88, '2026-11');
+const nov = fr.rows.find((r) => r.month === '2026-11')!; const oct = fr.rows.find((r) => r.month === '2026-10')!;
+eq('November: payout 225.01 + salary 1000 (88000 INR at 88) - hosting 10 - ads 20 - 5 fee', nov.profit, 1190.01);
+eq('November expense categories, biggest first', nov.byCategory, [{ category: 'Ads', usd: 20 }, { category: 'Hosting', usd: 10 }]);
+eq('October: payout 111.15 - domain 12 - 5 fee; the failed payout is ignored', oct.profit, 94.15);
+eq('a payout in another currency is skipped and counted', fr.skippedPayouts, 1);
+eq('totals add the months', fr.totals.profit, 1284.16);
+eq('rows are newest month first', fr.rows.map((r) => r.month), ['2026-11', '2026-10']);
+eq('the current month shows even with no data', fin.monthlyFinance([], [], 88, '2026-12').rows.map((r) => r.month), ['2026-12']);
+let negErr = ''; try { await store.addEntry(fdb, { type: 'expense', category: 'X', amount: -5, onDate: '2026-11-01' }); } catch (e) { negErr = (e as Error).message; }
+eq('a negative amount is refused in plain words', negErr, 'The amount must be a number above zero.');
+await store.deleteEntry(fdb, fe[0].id);
+eq('an entry can be deleted', (await store.listEntries(fdb)).length, 3);
+const gi = await store.addIdea(fdb, { title: 'Pocket quiz', kind: '  Mobile Game ' });
+const si = await store.addIdea(fdb, { title: 'Invoice tool', kind: 'saas' });
+eq('an idea can have a kind you wrote yourself, and SaaS is a built-in one', [gi.kind, si.kind], ['mobile game', 'saas']);
+
 console.log('settled revenue and overview');
 const settle = new Map([['a', { currency: 'USD', net: 242 - 37 }], ['b', { currency: 'USD', net: 199 }], ['e', { currency: 'USD', net: 300 }]]);
 const sum2 = pulse.summariseDodo(pays, null, NOW, 28, false, settle);

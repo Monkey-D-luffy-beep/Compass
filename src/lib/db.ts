@@ -83,6 +83,23 @@ const MIGRATIONS: string[] = [
   );
   create table settings (key text primary key, value text not null);
   `,
+  // 2: tasks can be archived (tucked away once done) instead of deleted
+  `alter table tasks add column archived_at text;`,
+  // 3: your own income and expenses (salary, tools, ads...), and idea kinds you can invent yourself
+  `
+  alter table ideas drop constraint if exists ideas_kind_check;
+  create table entries (
+    id         text primary key,
+    type       text not null check (type in ('income','expense')),
+    category   text not null,
+    amount     double precision not null,
+    currency   text not null check (currency in ('USD','INR')),
+    on_date    text not null,
+    note       text,
+    created_at text not null
+  );
+  create index entries_date on entries (on_date);
+  `,
 ];
 
 /** Brings the database up to date and seeds it on first run. */

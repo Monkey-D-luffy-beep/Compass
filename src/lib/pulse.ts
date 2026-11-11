@@ -132,6 +132,29 @@ export async function fetchDodo(env: Env, f: FetchLike = fetch, now = Date.now()
   } catch (e) { return { state: 'error', why: e instanceof Error ? e.message : 'Could not reach Dodo.' }; }
 }
 
+/* ------------------------------------------------------------------------------------------------ payouts */
+export interface PayoutRow { id: string; date: string; amount: number; fee: number; currency: string; status: string }
+const gp = globalThis as unknown as { __compass_payouts?: { at: number; rows: PayoutRow[] } };
+
+/** What Dodo has paid out to the bank, newest first (read-only; cached 10 minutes). Amounts are cents. */
+export async function fetchPayouts(env: Env = process.env, f: FetchLike = fetch, fresh = false): Promise<Part<PayoutRow[]>> {
+  const key = env.DODO_API_KEY?.trim();
+  if (!key) return { state: 'not-set-up', why: 'Add DODO_API_KEY (a read-only key) to read your payouts.' };
+  const c = gp.__compass_payouts;
+  if (!fresh && c && Date.now() - c.at < 10 * 60_000) return { state: 'ready', data: c.rows };
+  const base = env.DODO_ENV === 'test' ? 'https://test.dodopayments.com' : 'https://live.dodopayments.com';
+  try {
+    const rows: PayoutRow[] = [];
+    for (let page = 0; page < 20; page++) {
+      const items = itemsOf(await getJson(f, `${base}/payouts?page_size=100&page_number=${page}`, key));
+      for (const x of items) rows.push({ id: String(x.payout_id), date: String(x.created_at ?? '').slice(0, 10), amount: Number(x.amount) || 0, fee: Number(x.fee) || 0, currency: String(x.currency ?? 'USD'), status: String(x.status ?? '') });
+      if (items.length < 100) break;
+    }
+    gp.__compass_payouts = { at: Date.now(), rows };
+    return { state: 'ready', data: rows };
+  } catch (e) { return { state: 'error', why: e instanceof Error ? e.message : 'Could not read payouts.' }; }
+}
+
 /* --------------------------------------------------------------------------------------------- Nexora */
 export async function fetchNexora(env: Env, f: FetchLike = fetch): Promise<Part<NexoraReport>> {
   const url = env.NEXORA_PULSE_URL?.trim(), token = env.NEXORA_PULSE_TOKEN?.trim();

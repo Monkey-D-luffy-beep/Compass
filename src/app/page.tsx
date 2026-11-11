@@ -1,12 +1,10 @@
 import Link from 'next/link';
-import { Flame } from 'lucide-react';
 import { hasKey } from '@/lib/ai';
 import { bucketOf, dayLabel, hourNow, todayStr, weekEnd } from '@/lib/dates';
 import { getDb } from '@/lib/runtime';
-import { focusList, listRoutines, listTasks, listZones, runsOn, streak } from '@/lib/store';
+import { focusList, listTasks, listZones } from '@/lib/store';
 import { FocusAdvisor } from '@/components/FocusAdvisor';
 import { QuickAdd } from '@/components/QuickAdd';
-import { RoutineList } from '@/components/RoutineList';
 import { TaskRow } from '@/components/TaskRow';
 
 export const dynamic = 'force-dynamic';
@@ -15,14 +13,12 @@ export const metadata = { title: 'Today' };
 export default async function Today() {
   const db = await getDb();
   const today = todayStr();
-  const [zones, open, routineRows, days, keyed] = await Promise.all([
-    listZones(db), listTasks(db, { status: 'open' }), listRoutines(db, today), streak(db, today), hasKey(db),
+  const [zones, open, keyed] = await Promise.all([
+    listZones(db), listTasks(db, { status: 'open' }), hasKey(db),
   ]);
   const focus = focusList(open, today, 3);
   const dueNow = open.filter((t) => ['overdue', 'today'].includes(bucketOf(t.dueOn, today)));
   const weekTasks = open.filter((t) => bucketOf(t.dueOn, today) === 'week');
-  const routine = routineRows.map((r) => ({ ...r, runsToday: runsOn(r.days, today) })).filter((r) => r.runsToday);
-  const doneCount = routine.filter((r) => r.doneToday).length;
   const hour = hourNow();
   const greet = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
 
@@ -33,7 +29,6 @@ export default async function Today() {
           <p className="label">{dayLabel(today)}</p>
           <h1 className="h-page mt-1">{greet}, Saurav</h1>
         </div>
-        {days > 0 && <span className="pill !px-3 !py-1.5 text-warn"><Flame className="h-4 w-4" />{days}-day routine streak</span>}
       </header>
 
       <div className="grid gap-5">
@@ -53,7 +48,7 @@ export default async function Today() {
         </section>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[1.35fr_1fr]">
+      <div className="grid gap-5">
         <section className="card" aria-label="Today's tasks">
           <header className="flex items-baseline justify-between px-4 pt-4"><h2 className="font-semibold">Today and overdue</h2><Link href="/plan" className="text-[13px] text-muted hover:text-ink">Open the timeline</Link></header>
           <div className="px-1.5 py-2">
@@ -63,11 +58,6 @@ export default async function Today() {
           <div className="border-t border-line px-4 py-3"><QuickAdd zones={zones} when="today" compact /></div>
         </section>
 
-        <section className="card card-pad" aria-label="Routine">
-          <div className="mb-2 flex items-baseline justify-between"><h2 className="font-semibold">Today&apos;s routine</h2><span className="text-[13px] text-muted">{doneCount} of {routine.length}</span></div>
-          <RoutineList items={routine} />
-          <Link href="/routine" className="mt-3 inline-block text-[13px] text-muted hover:text-ink">Edit routine</Link>
-        </section>
       </div>
 
       <section className="card" aria-label="This week">

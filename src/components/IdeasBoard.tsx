@@ -7,11 +7,12 @@ import { IDEA_KINDS, IDEA_STATUS, type Idea } from '@/lib/store';
 
 interface Draft { title: string; kind: string; pitch: string; moneyLogic: string; validateStep: string }
 
-const KIND_LABEL: Record<string, string> = { extension: 'New extension', lever: 'Revenue lever', content: 'Content', other: 'Other' };
+const KIND_LABEL: Record<string, string> = { extension: 'New extension', saas: 'SaaS', game: 'Game', lever: 'Revenue lever', content: 'Content', other: 'Other' };
+const labelOf = (k: string) => KIND_LABEL[k] ?? k.charAt(0).toUpperCase() + k.slice(1);
 
 export function IdeasBoard({ ideas }: { ideas: Idea[] }) {
   const router = useRouter();
-  const [title, setTitle] = useState(''); const [kind, setKind] = useState('extension'); const [pitch, setPitch] = useState(''); const [money, setMoney] = useState(''); const [test, setTest] = useState('');
+  const [title, setTitle] = useState(''); const [kind, setKind] = useState('extension'); const [customKind, setCustomKind] = useState(''); const [pitch, setPitch] = useState(''); const [money, setMoney] = useState(''); const [test, setTest] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [focus, setFocus] = useState(''); const [drafts, setDrafts] = useState<Draft[]>([]); const [thinking, setThinking] = useState(false); const [genError, setGenError] = useState<string | null>(null);
 
@@ -28,7 +29,7 @@ export function IdeasBoard({ ideas }: { ideas: Idea[] }) {
 
   async function add(e: React.FormEvent) {
     e.preventDefault(); setError(null);
-    try { await call('/api/ideas', 'POST', { title, kind, pitch, moneyLogic: money, validateStep: test }); setTitle(''); setPitch(''); setMoney(''); setTest(''); router.refresh(); }
+    try { await call('/api/ideas', 'POST', { title, kind: kind === '__custom' ? customKind : kind, pitch, moneyLogic: money, validateStep: test }); setTitle(''); setPitch(''); setMoney(''); setTest(''); setCustomKind(''); setKind('extension'); router.refresh(); }
     catch (err) { setError(err instanceof Error ? err.message : 'Could not add it.'); }
   }
   const patch = async (id: string, p: object) => { await call(`/api/ideas/${id}`, 'PATCH', p); router.refresh(); };
@@ -46,7 +47,7 @@ export function IdeasBoard({ ideas }: { ideas: Idea[] }) {
           <div className="grid gap-3 pt-1 lg:grid-cols-2">
             {drafts.map((d) => (
               <article key={d.title} className="rounded-xl border border-dashed border-line2 p-4">
-                <span className="pill mb-2">{KIND_LABEL[d.kind] ?? d.kind}</span>
+                <span className="pill mb-2">{labelOf(d.kind)}</span>
                 <h3 className="font-semibold leading-snug">{d.title}</h3>
                 {d.pitch && <p className="mt-1.5 text-muted">{d.pitch}</p>}
                 {d.moneyLogic && <p className="mt-2"><span className="label block">Why it could earn</span>{d.moneyLogic}</p>}
@@ -62,7 +63,7 @@ export function IdeasBoard({ ideas }: { ideas: Idea[] }) {
           <article key={i.id} className={`card card-pad flex flex-col ${i.status === 'dropped' || i.status === 'parked' ? 'opacity-60' : ''}`}>
             <div className="flex items-start justify-between gap-3">
               <div>
-                <span className="pill mb-2">{KIND_LABEL[i.kind] ?? i.kind}</span>
+                <span className="pill mb-2">{labelOf(i.kind)}</span>
                 <h2 className="text-[16px] font-semibold leading-snug">{i.title}</h2>
               </div>
               <button className="rounded-lg p-1.5 text-faint hover:text-bad" aria-label={`Delete ${i.title}`} onClick={async () => { await call(`/api/ideas/${i.id}`, 'DELETE'); router.refresh(); }}><Trash2 className="h-4 w-4" /></button>
@@ -85,7 +86,8 @@ export function IdeasBoard({ ideas }: { ideas: Idea[] }) {
         <p className="font-semibold">Add an idea</p>
         <div className="grid gap-3 sm:grid-cols-[1fr_180px]">
           <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="The idea in one line" aria-label="Idea" />
-          <select className="select" value={kind} onChange={(e) => setKind(e.target.value)} aria-label="Kind">{IDEA_KINDS.map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}</select>
+          <select className="select" value={kind} onChange={(e) => setKind(e.target.value)} aria-label="Kind">{IDEA_KINDS.map((k) => <option key={k} value={k}>{labelOf(k)}</option>)}<option value="__custom">Write my own…</option></select>
+          {kind === '__custom' && <input className="input" value={customKind} onChange={(e) => setCustomKind(e.target.value)} placeholder="Your own kind, e.g. Mobile app" aria-label="Your own kind" maxLength={24} />}
         </div>
         <textarea className="textarea" rows={2} value={pitch} onChange={(e) => setPitch(e.target.value)} placeholder="What is it?" aria-label="What is it" />
         <div className="grid gap-3 sm:grid-cols-2">

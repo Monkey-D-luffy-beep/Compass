@@ -45,3 +45,12 @@ body { min-height: 100vh; background: var(--bg); color: var(--ink); font-family:
 .skel { background: linear-gradient(90deg, var(--surface2), var(--line), var(--surface2)); background-size: 200% 100%; animation: sh 1.4s infinite; border-radius: 8px; }
 @keyframes sh { from { background-position: 200% 0 } to { background-position: -200% 0 } }
 .prose-answer p { margin: 0 0 .7em; } .prose-answer ul, .prose-answer ol { margin: 0 0 .7em 1.2em; } .prose-answer li { margin: .15em 0; } .prose-answer strong { color: var(--ink); } .prose-answer h3, .prose-answer h4 { font-weight: 650; margin: 1em 0 .35em; }
+
+/* A line that draws itself across a finished task. */
+.strike { background-image: linear-gradient(currentColor, currentColor); background-repeat: no-repeat; background-position: 0 58%; background-size: 0% 1.5px; -webkit-box-decoration-break: clone; box-decoration-break: clone; transition: background-size .38s ease, color .3s ease; }
+.strike[data-done="true"] { background-size: 100% 1.5px; color: var(--faint); }
+@keyframes check-pop { 0% { transform: scale(1); } 45% { transform: scale(1.28); } 100% { transform: scale(1); } }
+.check[data-on="true"] { animation: check-pop .28s ease; }
+@keyframes task-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.task-in { animation: task-in .22s ease; }
+@media (prefers-reduced-motion: reduce) { .strike, .check[data-on="true"], .task-in { animation: none; transition: none; } }

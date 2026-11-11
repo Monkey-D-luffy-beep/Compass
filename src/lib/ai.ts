@@ -171,14 +171,14 @@ export async function testKey(db: Db, secretKey: Buffer, f: FetchLike = fetch): 
 }
 
 /* ------------------------------------------------------------------------------------------ new ideas */
-export interface IdeaDraft { title: string; kind: 'extension' | 'lever' | 'content' | 'other'; pitch: string; moneyLogic: string; validateStep: string }
+export interface IdeaDraft { title: string; kind: string; pitch: string; moneyLogic: string; validateStep: string }
 
 /** Pulls ideas out of a model answer. Pure: tolerates a code fence or chatter around the JSON, drops anything unusable and repeats of known titles. */
 export function parseIdeas(text: string, known: string[] = []): IdeaDraft[] {
   const m = text.match(/\[[\s\S]*\]/); if (!m) return [];
   let arr: unknown; try { arr = JSON.parse(m[0]); } catch { return []; }
   if (!Array.isArray(arr)) return [];
-  const kinds = ['extension', 'lever', 'content', 'other'];
+  const kinds = ['extension', 'saas', 'game', 'content', 'lever', 'other'];
   const seen = new Set(known.map((k) => k.trim().toLowerCase()));
   const out: IdeaDraft[] = [];
   for (const x of arr) {
@@ -186,7 +186,7 @@ export function parseIdeas(text: string, known: string[] = []): IdeaDraft[] {
     const s = (v: unknown, n: number) => (typeof v === 'string' ? v.trim().slice(0, n) : '');
     const title = s(o.title, 120); if (!title || seen.has(title.toLowerCase())) continue;
     seen.add(title.toLowerCase());
-    out.push({ title, kind: kinds.includes(o.kind as string) ? (o.kind as IdeaDraft['kind']) : 'extension', pitch: s(o.pitch, 400), moneyLogic: s(o.moneyLogic, 500), validateStep: s(o.validateStep, 400) });
+    out.push({ title, kind: kinds.includes(o.kind as string) ? (o.kind as string) : 'extension', pitch: s(o.pitch, 400), moneyLogic: s(o.moneyLogic, 500), validateStep: s(o.validateStep, 400) });
     if (out.length === 5) break;
   }
   return out;
@@ -206,7 +206,7 @@ export async function generateIdeas(db: Db, secretKey: Buffer, brain: string, fo
     '- Do not repeat anything in his existing list.',
     '',
     'Answer with ONLY a JSON array of exactly 5 objects, no other text:',
-    '[{"title":"...","kind":"extension|lever|content|other","pitch":"what it is, one or two sentences","moneyLogic":"why it could earn, and what is not known","validateStep":"cheapest test first"}]',
+    '[{"title":"...","kind":"extension|saas|game|content|lever|other","pitch":"what it is, one or two sentences","moneyLogic":"why it could earn, and what is not known","validateStep":"cheapest test first"}]',
     '',
     '=== BRAIN ===', brain.trim() || '(empty)',
     '',
