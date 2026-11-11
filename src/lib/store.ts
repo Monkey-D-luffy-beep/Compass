@@ -25,13 +25,13 @@ export async function addZone(db: Db, i: { name: string; kind?: Zone['kind']; co
   const name = i.name?.trim(); if (!name) throw new InputError('Give the zone a name.');
   const sort = Number((await one(db, 'select coalesce(max(sort), -1) + 1 as n from zones'))!.n);
   const zid = randomUUID();
-  await db.run('insert into zones (id, name, kind, color, note, sort) values (?,?,?,?,?,?)', [zid, name.slice(0, 40), i.kind ?? 'project', i.color ?? '#8b90a0', i.note?.trim() || null, sort]);
+  await db.run('insert into zones (id, name, kind, color, note, sort) values (?,?,?,?,?,?)', [zid, name.slice(0, 60), i.kind ?? 'project', i.color ?? '#8b90a0', i.note?.trim() || null, sort]);
   return (await getZone(db, zid))!;
 }
 export async function updateZone(db: Db, id: string, p: { name?: string; color?: string; note?: string | null; archived?: boolean }): Promise<Zone> {
   const z = await getZone(db, id); if (!z) throw new InputError('That zone does not exist.');
   await db.run('update zones set name = ?, color = ?, note = ?, archived = ? where id = ?',
-    [(p.name ?? z.name).trim().slice(0, 40) || z.name, p.color ?? z.color, p.note === undefined ? z.note : p.note?.trim() || null, (p.archived ?? z.archived) ? 1 : 0, id]);
+    [(p.name ?? z.name).trim().slice(0, 60) || z.name, p.color ?? z.color, p.note === undefined ? z.note : p.note?.trim() || null, (p.archived ?? z.archived) ? 1 : 0, id]);
   return (await getZone(db, id))!;
 }
 

@@ -92,13 +92,13 @@ function Block({ zone, initial }: { zone: Zone; initial: Task[] }) {
   return (
     <section className="card flex flex-col" aria-label={zone.name} style={{ borderTop: `3px solid ${zone.color}` }}>
       <header className="flex items-start justify-between gap-2 px-4 pt-3.5">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           {renaming ? (
-            <input autoFocus className="input !py-1 !text-[16px] font-semibold" value={newName} maxLength={40} aria-label="Project name"
+            <input autoFocus className="input !py-1 !text-[16px] font-semibold" value={newName} maxLength={60} aria-label="Project name"
               onChange={(e) => setNewName(e.target.value)} onBlur={saveName}
               onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { setNewName(zone.name); setRenaming(false); } }} />
           ) : (
-            <h2 className="truncate text-[16px] font-semibold"><button type="button" className="max-w-full truncate rounded px-1 -mx-1 text-left hover:bg-surface2" title="Click to rename" onClick={() => { setNewName(zone.name); setRenaming(true); }}>{zone.name}</button></h2>
+            <h2 className="text-[16px] font-semibold leading-snug"><button type="button" className="max-w-full break-words rounded px-1 -mx-1 text-left hover:bg-surface2" title="Click to rename" onClick={() => { setNewName(zone.name); setRenaming(true); }}>{zone.name}</button></h2>
           )}
           <p className="text-[12.5px] text-faint">{tasks.length === 0 ? 'No tasks yet' : `${done} of ${tasks.length} done`}{done > 0 && <> · <button type="button" className="text-muted underline-offset-2 hover:text-ink hover:underline" onClick={archiveAllDone}>Archive {done} done</button></>}</p>
         </div>
@@ -155,7 +155,7 @@ export function ProjectBoard({ zones, tasks, archived }: { zones: Zone[]; tasks:
       <div className="flex flex-wrap items-center gap-3">
         {open ? (
           <form onSubmit={create} className="flex w-full max-w-md items-center gap-2">
-            <input autoFocus className="input !text-[16px]" value={name} onChange={(e) => setName(e.target.value)} placeholder="Project name" aria-label="Project name" maxLength={40} />
+            <input autoFocus className="input !text-[16px]" value={name} onChange={(e) => setName(e.target.value)} placeholder="Project name" aria-label="Project name" maxLength={60} />
             <button className="btn btn-primary" disabled={busy || !name.trim()}>Create</button>
             <button type="button" className="btn" onClick={() => { setOpen(false); setName(''); }}>Cancel</button>
           </form>
