@@ -8,3 +8,7 @@ node_modules/
 .smoke.*
 
 .vercel
+
+AGENTS.md
+reference/
+*.png.ref
